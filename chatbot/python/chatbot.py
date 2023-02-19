@@ -4,6 +4,7 @@
 from __future__ import print_function
 
 import argparse
+import requests
 import base64
 from concurrent import futures
 from datetime import datetime
@@ -121,15 +122,42 @@ next_id.tid = 100
 
 # Quotes from the fortune cookie file
 quotes = []
+history = []
 
-def next_quote():
-    idx = random.randrange(0, len(quotes))
-    # Make sure quotes are not repeated
-    while idx == next_quote.idx:
-        idx = random.randrange(0, len(quotes))
-    next_quote.idx = idx
-    return quotes[idx]
-next_quote.idx = 0
+def next_quote(msg):
+    url = "https://api.writesonic.com/v2/business/content/chatsonic?engine=premium&language=zh"
+    proxies = { 'http': 'http://127.0.0.1:33210', 'https': 'http://127.0.0.1:33210', }
+
+    payload = {
+        "enable_google_results": "true",
+        "enable_memory": True,
+        "input_text": msg.decode('utf-8'),
+        "history_data": history,
+    }
+    print(payload)
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "X-API-KEY": "7eaae20d-c54f-4eba-bbfd-eae8d39fd6d3"
+    }
+    history.append(
+        {
+            "is_sent":True,
+            "message":msg.decode('utf-8'), 
+        }
+    )
+
+    response = requests.post(url, json=payload, headers=headers, proxies=proxies, verify=False)
+    if response.status_code == 200:
+        print(response.text)
+        json_data = json.loads(response.text)
+        history.append({
+            "is_sent": False,
+            "message": json_data["message"]
+        })
+        return json_data["message"]
+
+    return response.text
 
 # This is the class for the server-side gRPC endpoints
 class Plugin(pbx.PluginServicer):
@@ -256,7 +284,8 @@ def client_message_loop(stream):
                 exec_future(msg.ctrl.id, msg.ctrl.code, msg.ctrl.text, msg.ctrl.params)
 
             elif msg.HasField("data"):
-                # log("message from:", msg.data.from_user_id)
+                log("message from:", msg.data.from_user_id)
+                log(msg)
 
                 # Protection against the bot talking to self from another session.
                 if msg.data.from_user_id != botUID:
@@ -266,7 +295,7 @@ def client_message_loop(stream):
                     # Insert a small delay to prevent accidental DoS self-attack.
                     time.sleep(0.1)
                     # Respond with a witty quote
-                    client_post(publish(msg.data.topic, next_quote()))
+                    client_post(publish(msg.data.topic, next_quote(msg.data.content)))
 
             elif msg.HasField("pres"):
                 # log("presence:", msg.pres.topic, msg.pres.what)
