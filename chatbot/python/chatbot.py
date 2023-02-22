@@ -4,6 +4,7 @@
 from __future__ import print_function
 
 import argparse
+import pathlib
 import requests
 import base64
 from concurrent import futures
@@ -49,7 +50,9 @@ onCompletion = {}
 # This is needed for gRPC ssl to work correctly.
 os.environ["GRPC_SSL_CIPHER_SUITES"] = "HIGH+ECDSA"
 
-chatbot: Persona
+persona: str
+photos_root: pathlib.Path
+friends: dict[str, Persona] = {}
 
 
 def log(*args):
@@ -337,9 +340,15 @@ def client_message_loop(stream):
                     client_post(note_read(msg.data.topic, msg.data.seq_id))
                     # Insert a small delay to prevent accidental DoS self-attack.
                     time.sleep(0.1)
-                    # Respond with a witty quote
-                    client_post(
-                        publish(msg.data.topic, chatbot.respond(msg.data.content)))
+                    if msg.data.topic in friends:
+                        chat_persona = friends[msg.data.topic]
+                    else:
+                        chat_persona = CreatePersona(
+                            persona, msg.data.topic, photos_root)
+                        friends[msg.data.topic] = chat_persona
+
+                    # Respond with with chat persona for this topic.
+                    client_post(chat_persona.publish_msg(msg.data.content))
 
             elif msg.HasField("pres"):
                 # log("presence:", msg.pres.topic, msg.pres.what)
@@ -413,9 +422,10 @@ def load_quotes(file_name):
 def run(args):
     schema = None
     secret = None
-
-    global chatbot
-    chatbot = CreatePersona(args.persona)
+    global persona
+    global photos_root
+    persona = args.persona
+    photos_root = args.photos_root
 
     if args.login_token:
         """Use token to login"""
@@ -497,10 +507,10 @@ if __name__ == '__main__':
         '--login-token', help='login using token authentication')
     parser.add_argument('--login-cookie', default='.tn-cookie',
                         help='read credentials from the provided cookie file')
-    parser.add_argument('--quotes', default='quotes.txt',
-                        help='file with messages for the chatbot to use, one message per line')
     parser.add_argument('--persona', default='writer',
-                        help='Persona name to use for the bot')
+                        help="Persona type for this chatbot.")
+    parser.add_argument('--photo_root', default='photos', type=pathlib.Path,
+                        help="root directory for storing aigirls' photos")
     args = parser.parse_args()
 
     run(args)
