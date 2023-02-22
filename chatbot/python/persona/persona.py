@@ -79,22 +79,21 @@ class Persona(ABC):
     """
 
     history: list[str] = []
-    feeling:  int
+    feeling:  int = 0
     photos_root: pathlib.Path
-    photo_pool: dict[pathlib.Path:int]
+    photo_pool: dict[pathlib.Path:int] = {}
     cmds: list[str] = [
         "命令",
         "看照片",
         "查状态",
     ]
-    tid: int
+    tid: int = 100
     topic: str
-    last_cmd: str
+    last_cmd: str = ''
 
     def __init__(self, topic: str, photos: pathlib.Path) -> None:
         self.topic = topic
         self.photos_root = photos
-        self.tid = 100
 
     def publish_msg(self, msg: str):
         head = {}
@@ -103,13 +102,15 @@ class Persona(ABC):
         self.tid += 1
 
         msg_str = msg.decode('utf-8')
-        if msg_str in self.cmds:
+        print("Received:", msg_str)
+        print(self.cmds)
+        if msg_str.strip('"') in self.cmds:
             content = self.cmd_resp(msg_str)
         else:
             self.history.append(
                 {
                     "is_sent": True,
-                    "message": msg,
+                    "message": msg_str,
                 }
             )
             content = self.ai_resp(msg_str)
@@ -139,10 +140,11 @@ class Persona(ABC):
         )
 
     def increase_feeling(self, msg: str, resp: str) -> None:
-        self.feeling += 1
+        self.feeling += 5
         if self.feeling % 10 == 0:
             # Arrived at a new level
-            level_path = self.photos_root / f'level{self.feeling / 10}'
+            level_path = self.photos_root / \
+                f'level{int(self.feeling / 10) - 1}'
             if level_path.exists():
                 for photo in level_path.iterdir():
                     self.photo_pool[photo] = 1
@@ -152,11 +154,12 @@ class Persona(ABC):
         pass
 
     def cmd_resp(self, cmd: str) -> str | dict[str, Any]:
+        cmd = cmd.strip('"')
         if (cmd == '命令'):
-            return """可以使用的命令：
-            [命令]：查看命令列表
-            [查状态]：查看当前状态
-            [看照片]：随机展示一张照片
+            return """可以使用的命令：\n
+            [命令]：查看命令列表\n
+            [查状态]：查看当前状态\n
+            [看照片]：随机展示一张照片\n
             """
         elif (cmd == '查状态'):
             _unread_photos = sum(self.photo_pool.values())
@@ -172,11 +175,11 @@ class Persona(ABC):
         return None
 
     def get_next_photo(self) -> str | dict[str, Any]:
-        if self.last_cmd == '看照片':
-            return "刚刚发过了嘛，不能总是看照片啦！"
+        # if self.last_cmd.strip('"') == '看照片':
+        # return "刚刚发过了嘛，不能总是看照片啦！"
         for photo, status in self.photo_pool.items():
-            if status == 0:
-                self.photo_pool[photo] = 1
+            if status == 1:
+                self.photo_pool[photo] = 0
                 return inline_image(photo)
         return "暂时没有可以看的照片啦，和我聊聊天，解锁更多的照片把！"
 

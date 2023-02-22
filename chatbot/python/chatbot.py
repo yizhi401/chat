@@ -449,7 +449,7 @@ def run(args):
 
     if schema:
         # Load random quotes from file
-        log("Loaded {} quotes".format(load_quotes(args.quotes)))
+        # log("Loaded {} quotes".format(load_quotes(args.quotes)))
 
         # Start Plugin server
         server = init_server(args.listen)
@@ -509,7 +509,7 @@ if __name__ == '__main__':
                         help='read credentials from the provided cookie file')
     parser.add_argument('--persona', default='writer',
                         help="Persona type for this chatbot.")
-    parser.add_argument('--photo_root', default='photos', type=pathlib.Path,
+    parser.add_argument('--photos_root', default='photos', type=pathlib.Path,
                         help="root directory for storing aigirls' photos")
     args = parser.parse_args()
 
