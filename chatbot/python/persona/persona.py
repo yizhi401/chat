@@ -2,6 +2,7 @@
 import requests
 import json
 import base64
+import openai
 import pathlib
 from abc import ABC, abstractmethod
 from typing import Any
@@ -77,8 +78,8 @@ class Persona(ABC):
     """Abstract class for a persona. Persona is used for each topic.
     Cannot share data between topics.
     """
-
-    history: list[str] = []
+    persona_preset: list[dict[str, Any]] = []
+    history: list[dict[str, Any]] = []
     feeling:  int = 0
     photos_root: pathlib.Path
     photo_pool: dict[pathlib.Path:int] = {}
@@ -94,6 +95,11 @@ class Persona(ABC):
     def __init__(self, topic: str, photos: pathlib.Path) -> None:
         self.topic = topic
         self.photos_root = photos
+        self.prepare_persona()
+
+    @abstractmethod
+    def prepare_persona(self) -> None:
+        pass
 
     def publish_msg(self, msg: str):
         head = {}
@@ -185,11 +191,56 @@ class Persona(ABC):
 
 
 class PsychoPersona(Persona):
+    def prepare_persona(self) -> None:
+        self.persona_preset = []
+        self.persona_preset.extend([
+            {
+                "is_sent": True,
+                "message": "现在你是我的女朋友。",
+            },
+            {
+                "is_sent": False,
+                "message": "好的，现在我是你的女朋友，你可以叫我Yor。",
+            }
+        ])
+
+    def generate_prompt(self, msg: str) -> str:
+        prompt = ""
+        for h in self.persona_preset + self.history:
+            if h['is_sent']:
+                prompt += f"User: {h['message']}\n"
+            else:
+                prompt += f"Yor: {h['message']}\n"
+        prompt += "Yor: "
+        print(prompt)
+        return prompt
+
     def ai_resp(self, msg: str) -> str:
-        pass
+        openai.api_key = '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'
+        response = openai.Completion.create(
+            model="text-davinci-003",
+            max_tokens=500,
+            prompt=self.generate_prompt(msg),
+            temperature=0.6,
+        )
+        print(response.choices[0].text)
+        return response.choices[0].text
 
 
 class WriterPersona(Persona):
+    def prepare_persona(self) -> None:
+        self.persona_preset = []
+        self.persona_preset.extend([
+            {
+                "is_sent": True,
+                "message": "现在你是我的女朋友。",
+            },
+            {
+                "is_sent": False,
+                "message": "好的，现在我是你的女朋友，你可以叫我Alice。",
+            }
+        ])
+
     def ai_resp(self, msg: str) -> str:
         url = "https://api.writesonic.com/v2/business/content/chatsonic?engine=premium&language=zh"
         proxies = {'http': 'http://127.0.0.1:33210',
@@ -198,7 +249,7 @@ class WriterPersona(Persona):
             "enable_google_results": "true",
             "enable_memory": True,
             "input_text": msg,
-            "history_data": self.history,
+            "history_data": self.persona_preset + self.history,
         }
         headers = {
             "accept": "application/json",
