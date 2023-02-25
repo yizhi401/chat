@@ -79,22 +79,27 @@ class Persona(ABC):
     Cannot share data between topics.
     """
     persona_preset: list[dict[str, Any]] = []
-    history: list[dict[str, Any]] = []
-    feeling:  int = 0
+    history: list[dict[str, Any]]
+    feeling:  int
     photos_root: pathlib.Path
-    photo_pool: dict[pathlib.Path:int] = {}
+    photo_pool: dict[pathlib.Path:int]
     cmds: list[str] = [
         "命令",
         "看照片",
         "查状态",
     ]
-    tid: int = 100
+    tid: int
     topic: str
-    last_cmd: str = ''
+    last_cmd: str
 
     def __init__(self, topic: str, photos: pathlib.Path) -> None:
         self.topic = topic
         self.photos_root = photos
+        self.photo_pool = {}
+        self.feeling = 0
+        self.tid = 100
+        self.last_cmd = ''
+        self.history = []
         self.prepare_persona()
 
     @abstractmethod
@@ -208,15 +213,15 @@ class PsychoPersona(Persona):
         prompt = ""
         for h in self.persona_preset + self.history:
             if h['is_sent']:
-                prompt += f"User: {h['message']}\n"
+                prompt += f"You: {h['message']}\n"
             else:
-                prompt += f"Yor: {h['message']}\n"
-        prompt += "Yor: "
+                prompt += f"makima: {h['message']}\n"
+        prompt += "makima: "
         print(prompt)
         return prompt
 
     def ai_resp(self, msg: str) -> str:
-        openai.api_key = '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'
+        openai.api_key = ''
         response = openai.Completion.create(
             model="text-davinci-003",
             max_tokens=500,
@@ -237,7 +242,7 @@ class WriterPersona(Persona):
             },
             {
                 "is_sent": False,
-                "message": "好的，现在我是你的女朋友，你可以叫我Alice。",
+                "message": "好的，现在我是你的女朋友，你可以叫我Yor。",
             }
         ])
 
