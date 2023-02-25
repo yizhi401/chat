@@ -1,5 +1,6 @@
 """Define persona class for chatbot."""
 import requests
+import random
 import json
 import base64
 import openai
@@ -188,11 +189,12 @@ class Persona(ABC):
     def get_next_photo(self) -> str | dict[str, Any]:
         # if self.last_cmd.strip('"') == '看照片':
         # return "刚刚发过了嘛，不能总是看照片啦！"
-        for photo, status in self.photo_pool.items():
-            if status == 1:
-                self.photo_pool[photo] = 0
-                return inline_image(photo)
-        return "暂时没有可以看的照片啦，和我聊聊天，解锁更多的照片把！"
+        unread_photos = [photo for photo, status in self.photo_pool.items() if status == 1]
+        if len(unread_photos) == 0:
+            return "暂时没有可以看的照片啦，和我聊聊天，解锁更多的照片把！"
+        photo = random.choice(unread_photos)
+        self.photo_pool[photo] = 0
+        return inline_image(photo)
 
 
 class PsychoPersona(Persona):
@@ -205,7 +207,7 @@ class PsychoPersona(Persona):
             },
             {
                 "is_sent": False,
-                "message": "好的，现在我是你的女朋友，你可以叫我Yor。",
+                "message": "好的，现在我是你的女朋友，你可以叫我Makima。",
             }
         ])
 
@@ -221,7 +223,7 @@ class PsychoPersona(Persona):
         return prompt
 
     def ai_resp(self, msg: str) -> str:
-        openai.api_key = ''
+        openai.api_key = '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'
         response = openai.Completion.create(
             model="text-davinci-003",
             max_tokens=500,

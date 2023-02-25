@@ -145,50 +145,6 @@ def next_id():
 
 next_id.tid = 100
 
-# Quotes from the fortune cookie file
-quotes = []
-
-
-def next_quote(msg):
-    url = "https://api.writesonic.com/v2/business/content/chatsonic?engine=premium&language=zh"
-    proxies = {'http': 'http://127.0.0.1:33210',
-               'https': 'http://127.0.0.1:33210', }
-
-    payload = {
-        "enable_google_results": "true",
-        "enable_memory": True,
-        "input_text": msg.decode('utf-8'),
-        "history_data": history,
-    }
-    print(payload)
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "X-API-KEY": "7eaae20d-c54f-4eba-bbfd-eae8d39fd6d3"
-    }
-    history.append(
-        {
-            "is_sent": True,
-            "message": msg.decode('utf-8'),
-        }
-    )
-
-    response = requests.post(
-        url, json=payload, headers=headers, proxies=proxies, verify=False)
-    if response.status_code == 200:
-        print(response.text)
-        json_data = json.loads(response.text)
-        history.append({
-            "is_sent": False,
-            "message": json_data["message"]
-        })
-        return json_data["message"]
-
-    return response.text
-
-# This is the class for the server-side gRPC endpoints
-
-
 class Plugin(pbx.PluginServicer):
     def Account(self, acc_event, context):
         action = None
@@ -340,12 +296,12 @@ def client_message_loop(stream):
                     client_post(note_read(msg.data.topic, msg.data.seq_id))
                     # Insert a small delay to prevent accidental DoS self-attack.
                     time.sleep(0.1)
-                    if msg.data.topic in friends:
-                        chat_persona = friends[msg.data.topic]
+                    if msg.data.from_user_id in friends:
+                        chat_persona = friends[msg.data.from_user_id]
                     else:
                         chat_persona = CreatePersona(
                             persona, msg.data.topic, photos_root)
-                        friends[msg.data.topic] = chat_persona
+                        friends[msg.data.from_user_id] = chat_persona
 
                     # Respond with with chat persona for this topic.
                     client_post(chat_persona.publish_msg(msg.data.content))
