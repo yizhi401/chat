@@ -26,9 +26,14 @@ import grpc
 from google.protobuf.json_format import MessageToDict
 
 # Import generated grpc modules
-from tinode_grpc import pb
-from tinode_grpc import pbx
+import model_pb2 as pb
+import model_pb2_grpc as pbx
 from persona.persona import Persona, CreatePersona
+import multiprocessing
+
+# import sys
+# sys.path.insert(0, os.path.abspath(
+# os.path.join(os.path.dirname(__file__), '..', '..', 'py_grpc')))
 
 # For compatibility with python2
 if sys.version_info[0] >= 3:
@@ -52,6 +57,8 @@ os.environ["GRPC_SSL_CIPHER_SUITES"] = "HIGH+ECDSA"
 
 persona: str
 photos_root: pathlib.Path
+processors: dict[str, tuple[multiprocessing.Queue,
+                            multiprocessing.Process]] = {}
 friends: dict[str, Persona] = {}
 
 
@@ -144,6 +151,7 @@ def next_id():
 
 
 next_id.tid = 100
+
 
 class Plugin(pbx.PluginServicer):
     def Account(self, acc_event, context):
@@ -238,6 +246,10 @@ def note_read(topic, seq):
     return pb.ClientMsg(note=pb.ClientNote(topic=topic, what=pb.READ, seq_id=seq))
 
 
+def typing_reply(topic):
+    return pb.ClientMsg(note=pb.ClientNote(topic=topic, what=pb.KP))
+
+
 def init_server(listen):
     # Launch plugin server: accept connection(s) from the Tinode server.
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=16))
@@ -257,7 +269,7 @@ def init_client(addr, schema, secret, cookie_file_name, secure, ssl_host):
     channel = None
     if secure:
         opts = (('grpc.ssl_target_name_override',
-                ssl_host),) if ssl_host else None
+                 ssl_host),) if ssl_host else None
         channel = grpc.secure_channel(
             addr, grpc.ssl_channel_credentials(), opts)
     else:
@@ -273,6 +285,52 @@ def init_client(addr, schema, secret, cookie_file_name, secure, ssl_host):
     return stream
 
 
+def process_chat(queue_in,
+                 queue_out,
+                 persona,
+                 photos_root,
+                 ):
+    while True:
+        msg = queue_in.get()
+        if msg == None:
+            return
+
+        # Respond to message.
+        # Mark received message as read.
+        client_post(note_read(msg.data.topic, msg.data.seq_id))
+        # Notify user that we are responding.
+        client_post(typing_reply(msg.data.topic))
+        # # Insert a small delay to prevent accidental DoS self-attack.
+        time.sleep(0.1)
+
+        if msg.data.from_user_id in friends:
+            chat_persona = friends[msg.data.from_user_id]
+        else:
+            chat_persona = CreatePersona(
+                persona, msg.data.topic, photos_root)
+            friends[msg.data.from_user_id] = chat_persona
+
+        # Respond with with chat persona for this topic.
+        queue_out.put(chat_persona.publish_msg(msg.data.content))
+
+
+def process_data_msg(msg):
+    log(msg)
+
+    if msg.data.from_user_id in processors:
+        chat_queue = processors[msg.data.from_user_id][0]
+    else:
+        chat_queue = multiprocessing.Queue()
+        processor = multiprocessing.Process(
+            target=process_chat, args=(chat_queue, queue_out, persona, photos_root))
+        processor.daemon = True
+        processor.start()
+        processors[msg.data.from_user_id] = [chat_queue, processor]
+
+    # Put incoming message to the queue.
+    chat_queue.put(msg)
+
+
 def client_message_loop(stream):
     try:
         # Read server responses
@@ -286,26 +344,9 @@ def client_message_loop(stream):
                             msg.ctrl.text, msg.ctrl.params)
 
             elif msg.HasField("data"):
-                log("message from:", msg.data.from_user_id)
-                log(msg)
-
                 # Protection against the bot talking to self from another session.
                 if msg.data.from_user_id != botUID:
-                    # Respond to message.
-                    # Mark received message as read
-                    client_post(note_read(msg.data.topic, msg.data.seq_id))
-                    # Insert a small delay to prevent accidental DoS self-attack.
-                    time.sleep(0.1)
-                    if msg.data.from_user_id in friends:
-                        chat_persona = friends[msg.data.from_user_id]
-                    else:
-                        chat_persona = CreatePersona(
-                            persona, msg.data.topic, photos_root)
-                        friends[msg.data.from_user_id] = chat_persona
-
-                    # Respond with with chat persona for this topic.
-                    client_post(chat_persona.publish_msg(msg.data.content))
-
+                    process_data_msg(msg)
             elif msg.HasField("pres"):
                 # log("presence:", msg.pres.topic, msg.pres.what)
                 # Wait for peers to appear online and subscribe to their topics
