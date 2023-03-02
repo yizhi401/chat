@@ -4,7 +4,10 @@ import random
 from multiprocessing import Process, Queue, Lock
 import model_pb2 as pb
 import model_pb2_grpc as pbx
-from persona.persona import Persona, CreatePersona
+from persona import Persona, CreatePersona
+from db import db
+import utils
+import common
 
 friends: dict[str, Persona] = {}
 
@@ -15,6 +18,20 @@ def note_read(topic, seq):
 
 def typing_reply(topic):
     return pb.ClientMsg(note=pb.ClientNote(topic=topic, what=pb.KP))
+
+
+def publish_msg(content, tid, topic):
+    head = {}
+    head['mime'] = utils.encode_to_bytes('text/x-drafty')
+
+    return pb.ClientMsg(
+        pub=pb.ClientPub(
+            id=str(tid),
+            topic=topic,
+            no_echo=True,
+            head=head,
+            content=utils.encode_to_bytes(content)),
+    )
 
 
 def process_chat(queue_in,
@@ -34,6 +51,10 @@ def process_chat(queue_in,
         queue_out.put(typing_reply(msg.data.topic))
         # # Insert a small delay to prevent accidental DoS self-attack.
         time.sleep(0.1)
+
+        if not db.check_user_validity(msg.data.from_user_id):
+            # Respond with with chat persona for this topic.
+            queue_out.put(publish_msg(common.COMMON_MSG['USER_INVALID']))
 
         if msg.data.from_user_id in friends:
             chat_persona = friends[msg.data.from_user_id]

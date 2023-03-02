@@ -9,30 +9,13 @@ from abc import ABC, abstractmethod
 from typing import Any
 from PIL import Image
 import os
-try:
-    from io import BytesIO as memory_io
-except ImportError:
-    from cStringIO import StringIO as memory_io
+from io import BytesIO as memory_io
 
 # Import generated grpc modules
 from tinode_grpc import pb
 from tinode_grpc import pbx
-
-
-# Maximum allowed linear dimension of an inline image in pixels.
-MAX_IMAGE_DIM = 768
-MAX_HISTORY_DATA = 20
-
-
-def encode_to_bytes(src):
-    # encode_to_bytes converts the 'src' to a byte array.
-    # An object/dictionary is first converted to json string then it's converted to bytes.
-    # A string is directly converted to bytes.
-    if src == None:
-        return None
-    # if isinstance(src, str):
-        # return src.encode('utf-8')
-    return json.dumps(src).encode('utf-8')
+import utils
+import common
 
 
 def inline_image(filename: pathlib.Path):
@@ -42,10 +25,10 @@ def inline_image(filename: pathlib.Path):
         width = im.width
         height = im.height
         format = im.format if im.format else "JPEG"
-        if width > MAX_IMAGE_DIM or height > MAX_IMAGE_DIM:
+        if width > common.MAX_IMAGE_DIM or height > common.MAX_IMAGE_DIM:
             # Scale the image
-            scale = min(min(width, MAX_IMAGE_DIM) / width,
-                        min(height, MAX_IMAGE_DIM) / height)
+            scale = min(min(width, common.MAX_IMAGE_DIM) / width,
+                        min(height, common.MAX_IMAGE_DIM) / height)
             width = int(width * scale)
             height = int(height * scale)
             resized = im.resize((width, height))
@@ -109,7 +92,7 @@ class Persona(ABC):
 
     def publish_msg(self, msg: str):
         head = {}
-        head['mime'] = encode_to_bytes('text/x-drafty')
+        head['mime'] = utils.encode_to_bytes('text/x-drafty')
 
         self.tid += 1
 
@@ -125,12 +108,12 @@ class Persona(ABC):
                     "content": msg_str,
                 }
             )
-            content = self.ai_resp(msg_str)
+            content = self.ai_resp()
             self.history.append({
                 "role": "assistant",
                 "content": content,
             })
-            if len(self.history) > MAX_HISTORY_DATA:
+            if len(self.history) > common.MAX_HISTORY_DATA:
                 # Remove the oldest 2 message
                 self.history.pop(0)
                 self.history.pop(0)
@@ -148,7 +131,7 @@ class Persona(ABC):
                 topic=self.topic,
                 no_echo=True,
                 head=head,
-                content=encode_to_bytes(content)),
+                content=utils.encode_to_bytes(content)),
         )
 
     def increase_feeling(self, msg: str, resp: str) -> None:
@@ -164,21 +147,17 @@ class Persona(ABC):
     def generate_prompt(self) -> list[dict[str, str]]:
         messages = []
         messages.extend(self.persona_preset)
-        if len(self.history) > 20:
-            # Only keeps 20 talks at most.
-            self.history.pop(0)
-            self.history.pop(0)
         messages.extend(self.history)
         return messages
 
-    def ai_resp(self, msg: str) -> str:
+    def ai_resp(self) -> str:
         openai.api_key = ''
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=self.generate_prompt(),
         )
         print(response.choices[0]['message']['content'])
-        return response.choices[0]['message']['content']
+        return response.choices[0]['message']['content'].strip('"')
 
     def cmd_resp(self, cmd: str) -> str | dict[str, Any]:
         cmd = cmd.strip('"')
@@ -202,8 +181,8 @@ class Persona(ABC):
         return None
 
     def get_next_photo(self) -> str | dict[str, Any]:
-        # if self.last_cmd.strip('"') == '看照片':
-        # return "刚刚发过了嘛，不能总是看照片啦！"
+        if self.last_cmd.strip('"') == '看照片':
+            return "刚刚发过了嘛，不能总是看照片啦！"
         unread_photos = [photo for photo,
                          status in self.photo_pool.items() if status == 1]
         if len(unread_photos) == 0:
