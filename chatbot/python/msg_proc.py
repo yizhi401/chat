@@ -2,81 +2,45 @@ import time
 import os
 import random
 from multiprocessing import Process, Queue, Lock
+import model_pb2 as pb
+import model_pb2_grpc as pbx
+from persona.persona import Persona, CreatePersona
+
+friends: dict[str, Persona] = {}
 
 
-# Producer function that places data on the Queue
-def producer(queue, lock, names):
-    # Synchronize access to the console
-    with lock:
-        print('Starting producer => {}'.format(os.getpid()))
-        
-    # Place our names on the Queue
-    for name in names:
-        time.sleep(random.randint(0, 10))
-        queue.put(name)
-
-    # Synchronize access to the console
-    with lock:
-        print('Producer {} exiting...'.format(os.getpid()))
+def note_read(topic, seq):
+    return pb.ClientMsg(note=pb.ClientNote(topic=topic, what=pb.READ, seq_id=seq))
 
 
-# The consumer function takes data off of the Queue
-def consumer(queue, lock):
-    # Synchronize access to the console
-    with lock:
-        print('Starting consumer => {}'.format(os.getpid()))
-    
-    # Run indefinitely
+def typing_reply(topic):
+    return pb.ClientMsg(note=pb.ClientNote(topic=topic, what=pb.KP))
+
+
+def process_chat(queue_in,
+                 queue_out,
+                 persona,
+                 photos_root,
+                 ):
     while True:
-        time.sleep(random.randint(0, 10))
-        
-        # If the queue is empty, queue.get() will block until the queue has data
-        name = queue.get()
+        msg = queue_in.get()
+        if msg == None:
+            return
 
-        # Synchronize access to the console
-        with lock:
-            print('{} got {}'.format(os.getpid(), name))
+        # Respond to message.
+        # Mark received message as read.
+        queue_out.put(note_read(msg.data.topic, msg.data.seq_id))
+        # Notify user that we are responding.
+        queue_out.put(typing_reply(msg.data.topic))
+        # # Insert a small delay to prevent accidental DoS self-attack.
+        time.sleep(0.1)
 
+        if msg.data.from_user_id in friends:
+            chat_persona = friends[msg.data.from_user_id]
+        else:
+            chat_persona = CreatePersona(
+                persona, msg.data.topic, photos_root)
+            friends[msg.data.from_user_id] = chat_persona
 
-if __name__ == '__main__':
-    
-    # Some lists with our favorite characters
-    names = [['Master Shake', 'Meatwad', 'Frylock', 'Carl'],
-             ['Early', 'Rusty', 'Sheriff', 'Granny', 'Lil'],
-             ['Rick', 'Morty', 'Jerry', 'Summer', 'Beth']]
-
-    # Create the Queue object
-    queue = Queue()
-    
-    # Create a lock object to synchronize resource access
-    lock = Lock()
-
-    producers = []
-    consumers = []
-
-    for n in names:
-        # Create our producer processes by passing the producer function and it's arguments
-        producers.append(Process(target=producer, args=(queue, lock, n)))
-
-    # Create consumer processes
-    for i in range(len(names) * 2):
-        p = Process(target=consumer, args=(queue, lock))
-        
-        # This is critical! The consumer function has an infinite loop
-        # Which means it will never exit unless we set daemon to true
-        p.daemon = True
-        consumers.append(p)
-
-    # Start the producers and consumer
-    # The Python VM will launch new independent processes for each Process object
-    for p in producers:
-        p.start()
-
-    for c in consumers:
-        c.start()
-
-    # Like threading, we have a join() method that synchronizes our program
-    for p in producers:
-        p.join()
-
-    print('Parent process exiting...')
+        # Respond with with chat persona for this topic.
+        queue_out.put(chat_persona.publish_msg(msg.data.content))

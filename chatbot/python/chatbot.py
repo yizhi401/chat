@@ -5,7 +5,6 @@ from __future__ import print_function
 
 import argparse
 import pathlib
-import requests
 import base64
 from concurrent import futures
 from datetime import datetime
@@ -24,7 +23,7 @@ from google.protobuf.json_format import MessageToDict
 # Import generated grpc modules
 import model_pb2 as pb
 import model_pb2_grpc as pbx
-from persona.persona import Persona, CreatePersona
+from msg_proc import process_chat
 import multiprocessing
 
 # import sys
@@ -55,7 +54,6 @@ persona: str
 photos_root: pathlib.Path
 processors: dict[str, tuple[multiprocessing.Queue,
                             multiprocessing.Process]] = {}
-friends: dict[str, Persona] = {}
 
 
 def log(*args):
@@ -189,8 +187,8 @@ def client_reset():
     try:
         while queue_out.get(False) != None:
             pass
-    except multiprocessing.Queue.empty:
-        pass
+    except Exception as e:
+        log(e)
 
 
 def hello():
@@ -238,14 +236,6 @@ def publish(topic, text):
                                          head={"auto": json.dumps(True).encode('utf-8')}, content=json.dumps(text).encode('utf-8')))
 
 
-def note_read(topic, seq):
-    return pb.ClientMsg(note=pb.ClientNote(topic=topic, what=pb.READ, seq_id=seq))
-
-
-def typing_reply(topic):
-    return pb.ClientMsg(note=pb.ClientNote(topic=topic, what=pb.KP))
-
-
 def init_server(listen):
     # Launch plugin server: accept connection(s) from the Tinode server.
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=16))
@@ -279,35 +269,6 @@ def init_client(addr, schema, secret, cookie_file_name, secure, ssl_host):
     client_post(login(cookie_file_name, schema, secret))
 
     return stream
-
-
-def process_chat(queue_in,
-                 queue_out,
-                 persona,
-                 photos_root,
-                 ):
-    while True:
-        msg = queue_in.get()
-        if msg == None:
-            return
-
-        # Respond to message.
-        # Mark received message as read.
-        client_post(note_read(msg.data.topic, msg.data.seq_id))
-        # Notify user that we are responding.
-        client_post(typing_reply(msg.data.topic))
-        # # Insert a small delay to prevent accidental DoS self-attack.
-        time.sleep(0.1)
-
-        if msg.data.from_user_id in friends:
-            chat_persona = friends[msg.data.from_user_id]
-        else:
-            chat_persona = CreatePersona(
-                persona, msg.data.topic, photos_root)
-            friends[msg.data.from_user_id] = chat_persona
-
-        # Respond with with chat persona for this topic.
-        queue_out.put(chat_persona.publish_msg(msg.data.content))
 
 
 def process_data_msg(msg):

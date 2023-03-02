@@ -80,7 +80,7 @@ class Persona(ABC):
     Cannot share data between topics.
     """
     persona_preset: list[dict[str, Any]] = []
-    history: list[dict[str, Any]]
+    history: list[dict[str, str]]
     feeling:  int
     photos_root: pathlib.Path
     photo_pool: dict[pathlib.Path:int]
@@ -121,14 +121,14 @@ class Persona(ABC):
         else:
             self.history.append(
                 {
-                    "is_sent": True,
-                    "message": msg_str,
+                    "role": "user",
+                    "content": msg_str,
                 }
             )
             content = self.ai_resp(msg_str)
             self.history.append({
-                "is_sent": False,
-                "message": content,
+                "role": "assistant",
+                "content": content,
             })
             if len(self.history) > MAX_HISTORY_DATA:
                 # Remove the oldest 2 message
@@ -161,9 +161,24 @@ class Persona(ABC):
                 for photo in level_path.iterdir():
                     self.photo_pool[photo] = 1
 
-    @abstractmethod
+    def generate_prompt(self) -> list[dict[str, str]]:
+        messages = []
+        messages.extend(self.persona_preset)
+        if len(self.history) > 20:
+            # Only keeps 20 talks at most.
+            self.history.pop(0)
+            self.history.pop(0)
+        messages.extend(self.history)
+        return messages
+
     def ai_resp(self, msg: str) -> str:
-        pass
+        openai.api_key = ''
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=self.generate_prompt(),
+        )
+        print(response.choices[0]['message']['content'])
+        return response.choices[0]['message']['content']
 
     def cmd_resp(self, cmd: str) -> str | dict[str, Any]:
         cmd = cmd.strip('"')
@@ -200,77 +215,16 @@ class Persona(ABC):
 
 class PsychoPersona(Persona):
     def prepare_persona(self) -> None:
-        self.persona_preset = []
-        self.persona_preset.extend([
-            {
-                "is_sent": True,
-                "message": "现在你是我的女朋友。",
-            },
-            {
-                "is_sent": False,
-                "message": "好的，现在我是你的女朋友，你可以叫我Makima。",
-            }
-        ])
-
-    def generate_prompt(self, msg: str) -> str:
-        prompt = ""
-        for h in self.persona_preset + self.history:
-            if h['is_sent']:
-                prompt += f"You: {h['message']}\n"
-            else:
-                prompt += f"makima: {h['message']}\n"
-        prompt += "makima: "
-        print(prompt)
-        return prompt
-
-    def ai_resp(self, msg: str) -> str:
-        openai.api_key = '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'
-        response = openai.Completion.create(
-            model="text-davinci-003",
-            max_tokens=500,
-            prompt=self.generate_prompt(msg),
-            temperature=0.6,
-        )
-        print(response.choices[0].text)
-        return response.choices[0].text
+        self.persona_preset = [
+            {"role": "system", "content": "你是我的女朋友，名字叫Makima"}
+        ]
 
 
 class WriterPersona(Persona):
     def prepare_persona(self) -> None:
-        self.persona_preset = []
-        self.persona_preset.extend([
-            {
-                "is_sent": True,
-                "message": "现在你是我的女朋友。",
-            },
-            {
-                "is_sent": False,
-                "message": "好的，现在我是你的女朋友，你可以叫我Yor。",
-            }
-        ])
-
-    def ai_resp(self, msg: str) -> str:
-        url = "https://api.writesonic.com/v2/business/content/chatsonic?engine=premium&language=zh"
-        proxies = {'http': 'http://127.0.0.1:33210',
-                   'https': 'http://127.0.0.1:33210', }
-        payload = {
-            "enable_google_results": "true",
-            "enable_memory": True,
-            "input_text": msg,
-            "history_data": self.persona_preset + self.history,
-        }
-        headers = {
-            "accept": "application/json",
-            "content-type": "application/json",
-            "X-API-KEY": "7eaae20d-c54f-4eba-bbfd-eae8d39fd6d3"
-        }
-        response = requests.post(
-            url, json=payload, headers=headers, proxies=proxies, verify=False)
-        if response.status_code == 200:
-            json_data = json.loads(response.text)
-            return json_data["message"]
-
-        return response.text
+        self.persona_preset = [
+            {"role": "system", "content": "你是我的女朋友，名字叫Yor"}
+        ]
 
 
 def CreatePersona(persona: str, topic: str, photos_root: pathlib.Path) -> Persona:
