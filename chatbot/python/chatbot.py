@@ -13,10 +13,6 @@ import json
 import os
 import pkg_resources
 import platform
-try:
-    import Queue as queue
-except ImportError:
-    import queue
 import random
 import signal
 import sys
@@ -172,7 +168,7 @@ class Plugin(pbx.PluginServicer):
         return pb.Unused()
 
 
-queue_out = queue.Queue()
+queue_out = multiprocessing.Queue()
 
 
 def client_generate():
@@ -193,7 +189,7 @@ def client_reset():
     try:
         while queue_out.get(False) != None:
             pass
-    except queue.Empty:
+    except multiprocessing.Queue.empty:
         pass
 
 
@@ -406,14 +402,6 @@ def on_login(cookie_file_name, params):
         cookie.close()
     except Exception as err:
         log("Failed to save authentication cookie", err)
-
-
-def load_quotes(file_name):
-    with open(file_name) as f:
-        for line in f:
-            quotes.append(line.strip())
-
-    return len(quotes)
 
 
 def run(args):

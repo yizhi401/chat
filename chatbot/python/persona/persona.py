@@ -224,7 +224,7 @@ class PsychoPersona(Persona):
         return prompt
 
     def ai_resp(self, msg: str) -> str:
-        openai.api_key = ''
+        openai.api_key = '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'
         response = openai.Completion.create(
             model="text-davinci-003",
             max_tokens=500,
