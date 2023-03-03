@@ -9,10 +9,8 @@ import base64
 from concurrent import futures
 from datetime import datetime
 import json
-import os
 import logging
 import platform
-import random
 import signal
 import sys
 import time
@@ -46,6 +44,7 @@ class ChatBot:
         self.queue_out = multiprocessing.Queue()
 
         self.tid = 100
+        self.login_basic = ""
 
     def next_id(self) -> str:
         self.tid += 1
@@ -178,7 +177,7 @@ class ChatBot:
         else:
             chat_queue = multiprocessing.Queue()
             processor = multiprocessing.Process(
-                target=process_chat, args=(chat_queue, self.queue_out, self.persona, self.photos_root))
+                target=process_chat, args=(chat_queue, self.queue_out, self.login_basic, self.persona, self.photos_root))
             processor.daemon = True
             processor.start()
             self.processors[msg.data.from_user_id] = [chat_queue, processor]
@@ -216,7 +215,7 @@ class ChatBot:
                     pass
 
         except grpc._channel._Rendezvous as err:
-            logging.error("Disconnected:", err)
+            logging.error("Disconnected: %s", err)
 
     def on_login(self, cookie_file_name, params):
         self.client_post(self.subscribe('me'))
@@ -226,7 +225,7 @@ class ChatBot:
             return
 
         if 'user' in params:
-            botUID = params['user'].decode("ascii")
+            self.botUID = params['user'].decode("ascii")
 
         # Protobuf map 'params' is not a python object or dictionary. Convert it.
         nice = {'schema': 'token'}
@@ -258,6 +257,7 @@ class ChatBot:
             """Use username:password"""
             schema = 'basic'
             secret = args.login_basic.encode('utf-8')
+            self.login_basic = args.login_basic.split(":")[0]
             logging.info("Logging in with login:password %s", args.login_basic)
 
         else:

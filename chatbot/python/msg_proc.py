@@ -1,7 +1,6 @@
 import time
-import os
-import random
-from multiprocessing import Process, Queue, Lock
+import logging
+import multiprocessing
 import model_pb2 as pb
 import model_pb2_grpc as pbx
 from persona import Persona, CreatePersona
@@ -36,14 +35,16 @@ def publish_msg(content, tid, topic):
 
 def process_chat(queue_in,
                  queue_out,
+                 bot_name,
                  persona,
                  photos_root,
                  ):
+    tid = 100
     while True:
         msg = queue_in.get()
         if msg == None:
             return
-
+        tid += 1
         # Respond to message.
         # Mark received message as read.
         queue_out.put(note_read(msg.data.topic, msg.data.seq_id))
@@ -52,9 +53,13 @@ def process_chat(queue_in,
         # # Insert a small delay to prevent accidental DoS self-attack.
         time.sleep(0.1)
 
-        if not db.check_user_validity(msg.data.from_user_id):
+        if not db.check_user_validity(bot_name, msg.data.from_user_id):
             # Respond with with chat persona for this topic.
-            queue_out.put(publish_msg(common.COMMON_MSG['USER_INVALID']))
+            queue_out.put(publish_msg(
+                common.COMMON_MSG['USER_INVALID'], tid, msg.data.topic))
+            continue
+
+        logging.info("User %s is valid", msg.data.from_user_id)
 
         if msg.data.from_user_id in friends:
             chat_persona = friends[msg.data.from_user_id]

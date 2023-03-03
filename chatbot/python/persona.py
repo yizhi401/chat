@@ -195,14 +195,14 @@ class Persona(ABC):
 class PsychoPersona(Persona):
     def prepare_persona(self) -> None:
         self.persona_preset = [
-            {"role": "system", "content": "你是我的女朋友，名字叫Makima"}
+            {"role": "system", "content": "请模拟动漫 <电锯人> Makima的人格来和我对话"}
         ]
 
 
 class WriterPersona(Persona):
     def prepare_persona(self) -> None:
         self.persona_preset = [
-            {"role": "system", "content": "你是我的女朋友，名字叫Yor"}
+            {"role": "system", "content": "请模拟动漫 <间谍过家家> Yor的人格来和我对话"}
         ]
 
 
