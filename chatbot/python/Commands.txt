@@ -1,1 +1,0 @@
-python .\chatbot.py --login-basic=makimaki:makimaki --host=47.103.17.145:16060 --persona=psycho

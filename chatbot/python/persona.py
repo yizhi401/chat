@@ -1,6 +1,8 @@
 """Define persona class for chatbot."""
 import requests
+import logging
 import random
+import time
 import json
 import base64
 import openai
@@ -21,21 +23,23 @@ import common
 def inline_image(filename: pathlib.Path):
     # Create drafty representation of a message with an inline image.
     try:
-        im = Image.open(filename, 'r')
+        im = Image.open(filename, "r")
         width = im.width
         height = im.height
         format = im.format if im.format else "JPEG"
         if width > common.MAX_IMAGE_DIM or height > common.MAX_IMAGE_DIM:
             # Scale the image
-            scale = min(min(width, common.MAX_IMAGE_DIM) / width,
-                        min(height, common.MAX_IMAGE_DIM) / height)
+            scale = min(
+                min(width, common.MAX_IMAGE_DIM) / width,
+                min(height, common.MAX_IMAGE_DIM) / height,
+            )
             width = int(width * scale)
             height = int(height * scale)
             resized = im.resize((width, height))
             im.close()
             im = resized
 
-        mimetype = 'image/' + format.lower()
+        mimetype = "image/" + format.lower()
         bitbuffer = memory_io()
         im.save(bitbuffer, format=format)
         data = base64.b64encode(bitbuffer.getvalue())
@@ -45,11 +49,20 @@ def inline_image(filename: pathlib.Path):
             data = data.decode()
 
         result = {
-            'txt': ' ',
-            'fmt': [{'len': 1}],
-            'ent': [{'tp': 'IM', 'data':
-                     {'val': data, 'mime': mimetype, 'width': width, 'height': height,
-                      'name': filename.name}}]
+            "txt": " ",
+            "fmt": [{"len": 1}],
+            "ent": [
+                {
+                    "tp": "IM",
+                    "data": {
+                        "val": data,
+                        "mime": mimetype,
+                        "width": width,
+                        "height": height,
+                        "name": filename.name,
+                    },
+                }
+            ],
         }
         im.close()
         return result
@@ -62,11 +75,12 @@ class Persona(ABC):
     """Abstract class for a persona. Persona is used for each topic.
     Cannot share data between topics.
     """
+
     persona_preset: list[dict[str, Any]] = []
     history: list[dict[str, str]]
-    feeling:  int
+    feeling: int
     photos_root: pathlib.Path
-    photo_pool: dict[pathlib.Path:int]
+    photo_pool: dict[pathlib.Path : int]
     cmds: list[str] = [
         "命令",
         "看照片",
@@ -82,8 +96,9 @@ class Persona(ABC):
         self.photo_pool = {}
         self.feeling = 0
         self.tid = 100
-        self.last_cmd = ''
+        self.last_cmd = ""
         self.history = []
+        openai.api_key = utils.read_from_file("openai.key").strip()
         self.prepare_persona()
 
     @abstractmethod
@@ -92,11 +107,11 @@ class Persona(ABC):
 
     def publish_msg(self, msg: str):
         head = {}
-        head['mime'] = utils.encode_to_bytes('text/x-drafty')
+        head["mime"] = utils.encode_to_bytes("text/x-drafty")
 
         self.tid += 1
 
-        msg_str = msg.decode('utf-8')
+        msg_str = msg.decode("utf-8")
         print("Received:", msg_str)
         print(self.cmds)
         if msg_str.strip('"') in self.cmds:
@@ -105,14 +120,16 @@ class Persona(ABC):
             self.history.append(
                 {
                     "role": "user",
-                    "content": msg_str,
+                    "content": utils.clip_long_string(msg_str),
                 }
             )
             content = self.ai_resp()
-            self.history.append({
-                "role": "assistant",
-                "content": content,
-            })
+            self.history.append(
+                {
+                    "role": "assistant",
+                    "content": utils.clip_long_string(content),
+                }
+            )
             if len(self.history) > common.MAX_HISTORY_DATA:
                 # Remove the oldest 2 message
                 self.history.pop(0)
@@ -131,17 +148,26 @@ class Persona(ABC):
                 topic=self.topic,
                 no_echo=True,
                 head=head,
-                content=utils.encode_to_bytes(content)),
+                content=utils.encode_to_bytes(content),
+            ),
         )
 
     def increase_feeling(self, msg: str, resp: str) -> None:
-        self.feeling += 5
+        self.feeling += 1
+        logging.info("Feeling: %d", self.feeling)
         if self.feeling % 10 == 0:
             # Arrived at a new level
-            level_path = self.photos_root / \
-                f'level{int(self.feeling / 10) - 1}'
+            level_path = self.photos_root / f"lv{int(self.feeling / 10)}"
+            logging.info(f"Arrived at level {int(self.feeling / 10)}")
+            logging.info("Level photos path: " + str(level_path))
             if level_path.exists():
+                available_photo = []
                 for photo in level_path.iterdir():
+                    available_photo.append(photo)
+                # Choose 2-4 photos to add to the pool
+                for _ in range(0, random.randint(2, 4)):
+                    logging.info("Add photo to pool %s", photo)
+                    photo = random.choice(available_photo)
                     self.photo_pool[photo] = 1
 
     def generate_prompt(self) -> list[dict[str, str]]:
@@ -151,29 +177,30 @@ class Persona(ABC):
         return messages
 
     def ai_resp(self) -> str:
-        openai.api_key = ''
+        # Sleep 3 seconds to avoid too many requests.
+        time.sleep(3)
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=self.generate_prompt(),
         )
-        print(response.choices[0]['message']['content'])
-        return response.choices[0]['message']['content'].strip('"')
+        print(response.choices[0]["message"]["content"])
+        return response.choices[0]["message"]["content"].strip('"')
 
     def cmd_resp(self, cmd: str) -> str | dict[str, Any]:
         cmd = cmd.strip('"')
-        if (cmd == '命令'):
+        if cmd == "命令":
             return """可以使用的命令：\n
             [命令]：查看命令列表\n
             [查状态]：查看当前状态\n
             [看照片]：随机展示一张照片\n
             """
-        elif (cmd == '查状态'):
+        elif cmd == "查状态":
             _unread_photos = sum(self.photo_pool.values())
             return f"""当前状态:
             好感度：{self.feeling}
             已解锁照片：{_unread_photos}/{len(self.photo_pool)}
             """
-        elif (cmd == '看照片'):
+        elif cmd == "看照片":
             return self.get_next_photo()
         else:
             print("Unknown command")
@@ -181,10 +208,11 @@ class Persona(ABC):
         return None
 
     def get_next_photo(self) -> str | dict[str, Any]:
-        if self.last_cmd.strip('"') == '看照片':
+        if self.last_cmd.strip('"') == "看照片":
             return "刚刚发过了嘛，不能总是看照片啦！"
-        unread_photos = [photo for photo,
-                         status in self.photo_pool.items() if status == 1]
+        unread_photos = [
+            photo for photo, status in self.photo_pool.items() if status == 1
+        ]
         if len(unread_photos) == 0:
             return "暂时没有可以看的照片啦，和我聊聊天，解锁更多的照片把！"
         photo = random.choice(unread_photos)

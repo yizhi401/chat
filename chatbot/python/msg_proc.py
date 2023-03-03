@@ -21,7 +21,7 @@ def typing_reply(topic):
 
 def publish_msg(content, tid, topic):
     head = {}
-    head['mime'] = utils.encode_to_bytes('text/x-drafty')
+    head["mime"] = utils.encode_to_bytes("text/x-drafty")
 
     return pb.ClientMsg(
         pub=pb.ClientPub(
@@ -29,17 +29,20 @@ def publish_msg(content, tid, topic):
             topic=topic,
             no_echo=True,
             head=head,
-            content=utils.encode_to_bytes(content)),
+            content=utils.encode_to_bytes(content),
+        ),
     )
 
 
-def process_chat(queue_in,
-                 queue_out,
-                 bot_name,
-                 persona,
-                 photos_root,
-                 ):
+def process_chat(
+    queue_in,
+    queue_out,
+    bot_name,
+    persona,
+    photos_root,
+):
     tid = 100
+    utils.config_logging()
     while True:
         msg = queue_in.get()
         if msg == None:
@@ -55,8 +58,9 @@ def process_chat(queue_in,
 
         if not db.check_user_validity(bot_name, msg.data.from_user_id):
             # Respond with with chat persona for this topic.
-            queue_out.put(publish_msg(
-                common.COMMON_MSG['USER_INVALID'], tid, msg.data.topic))
+            queue_out.put(
+                publish_msg(common.COMMON_MSG["USER_INVALID"], tid, msg.data.topic)
+            )
             continue
 
         logging.info("User %s is valid", msg.data.from_user_id)
@@ -64,9 +68,14 @@ def process_chat(queue_in,
         if msg.data.from_user_id in friends:
             chat_persona = friends[msg.data.from_user_id]
         else:
-            chat_persona = CreatePersona(
-                persona, msg.data.topic, photos_root)
+            chat_persona = CreatePersona(persona, msg.data.topic, photos_root)
             friends[msg.data.from_user_id] = chat_persona
-
-        # Respond with with chat persona for this topic.
-        queue_out.put(chat_persona.publish_msg(msg.data.content))
+        try:
+            # Respond with with chat persona for this topic.
+            msg = chat_persona.publish_msg(msg.data.content)
+            queue_out.put(msg)
+        except Exception as e:
+            logging.error("Error in publish_msg %s", e)
+            queue_out.put(
+                publish_msg(common.COMMON_MSG["INTERNAL_ERROR"], tid, msg.data.topic)
+            )

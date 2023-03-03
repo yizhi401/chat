@@ -6,6 +6,7 @@ MAX_HISTORY_DATA = 20
 
 COMMON_MSG = {
     "USER_INVALID": "您的费用已耗尽，请充值！",
+    "INTERNAL_ERROR": "现在我的脑袋有点乱，让我再好好想想...",
 }
 
 APP_NAME = "Tino-chatbot"

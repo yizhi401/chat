@@ -1,2 +1,5 @@
 __pycache__
 photos
+openai.key
+chatbot*.log
+.tn-cookie

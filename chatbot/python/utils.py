@@ -1,4 +1,7 @@
 import json
+import logging
+import os
+import datetime
 import common
 from google.protobuf.json_format import MessageToDict
 
@@ -9,14 +12,14 @@ def encode_to_bytes(src):
     # A string is directly converted to bytes.
     if src == None:
         return None
-    return json.dumps(src).encode('utf-8')
+    return json.dumps(src).encode("utf-8")
 
 
 # Shorten long strings for logging.
 def clip_long_string(obj):
     if isinstance(obj, str):
         if len(obj) > common.MAX_LOG_LEN:
-            return '<' + str(len(obj)) + ' bytes: ' + obj[:12] + '...' + obj[-12:] + '>'
+            return "<" + str(len(obj)) + " bytes: " + obj[:12] + "..." + obj[-12:] + ">"
         return obj
     elif isinstance(obj, (list, tuple)):
         return [clip_long_string(item) for item in obj]
@@ -28,3 +31,25 @@ def clip_long_string(obj):
 
 def to_json(msg):
     return json.dumps(clip_long_string(MessageToDict(msg)))
+
+
+def read_from_file(file_path) -> str:
+    with open(file_path, "r") as f:
+        return f.read()
+
+
+def config_logging():
+    time_str = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    process_id = os.getpid()
+    # Set logfile name with date
+    logfile_name = f"chatbot[{process_id}]-{time_str}" + ".log"
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        filename=logfile_name,
+        filemode="w",
+    )
+    logging.getLogger("grpc").setLevel(logging.INFO)
+    logging.getLogger("grpc._channel").setLevel(logging.INFO)
+    logging.getLogger("grpc._server").setLevel(logging.INFO)
