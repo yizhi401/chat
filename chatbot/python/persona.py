@@ -243,15 +243,13 @@ class Persona(ABC):
     def ai_resp(self) -> str:
         # Sleep 3 seconds to avoid too many requests.
         # time.sleep(3)
-        for _ in range(0, 60):
-            time.sleep(0.5)
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=self.generate_prompt(),
-            )
-            answer = response.choices[0]["message"]["content"].strip('"')
-            logging.info(answer)
-        return response.choices[0]["message"]["content"].strip('"')
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=self.generate_prompt(),
+        )
+        answer = response.choices[0]["message"]["content"].strip('"')
+        logging.info(answer)
+        return answer
 
     def cmd_resp(self, cmd: str) -> str | dict[str, Any]:
         cmd = cmd.strip('"')
