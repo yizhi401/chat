@@ -82,12 +82,19 @@ class Persona(ABC):
     history: list[dict[str, str]]
     feeling: int
     photos_root: pathlib.Path
-    photo_pool: dict[pathlib.Path: int]
+    photo_pool: dict[pathlib.Path : int]
     tid: int
     topic: str
     last_cmd: str
 
-    def __init__(self, bot_name: str, from_user_id: str, topic: str, photos: pathlib.Path, db_instance: Database) -> None:
+    def __init__(
+        self,
+        bot_name: str,
+        from_user_id: str,
+        topic: str,
+        photos: pathlib.Path,
+        db_instance: Database,
+    ) -> None:
         self.bot_name = bot_name
         self.from_user_id = from_user_id
         self.topic = topic
@@ -116,12 +123,10 @@ class Persona(ABC):
         self.tokens_left = tokens_left
 
     def _load_from_db(self):
-        json_str = self.db.get_user_data(
-            f"{self.from_user_id}-{self.bot_name}")
+        json_str = self.db.get_user_data(f"{self.from_user_id}-{self.bot_name}")
         logging.info("Load from db: %s", json_str)
         if json_str == "":
-            logging.info("Find no user data for %s in db",
-                         self.from_user_id)
+            logging.info("Find no user data for %s in db", self.from_user_id)
             return
         json_data = json.loads(json_str)
         logging.info("Load from db: %s", json_data)
@@ -160,7 +165,8 @@ class Persona(ABC):
         }
         logging.debug("Save to db: %s", json_data)
         self.db.save_user_data(
-            f"{self.from_user_id}-{self.bot_name}", json.dumps(json_data))
+            f"{self.from_user_id}-{self.bot_name}", json.dumps(json_data)
+        )
 
     def _publish_msg(self, msg_str: str):
         head = {}
@@ -263,20 +269,14 @@ class Persona(ABC):
     def play_game(self, cmd):
         self.history.clear()
         game_content = common.GAME_OPTIONS[cmd]
-        self.history.append(
-            {"role": "system", "content": common.GAME_PROMPT}
-        )
-        self.history.append(
-            {"role": "assistant", "content": game_content}
-        )
+        self.history.append({"role": "system", "content": common.GAME_PROMPT})
+        self.history.append({"role": "assistant", "content": game_content})
         return game_content
 
     def find_fun(self, cmd):
         self.history.clear()
         find_content = common.FIND_OPTIONS[cmd]
-        self.history.append(
-            {"role": "system", "content": find_content[2]}
-        )
+        self.history.append({"role": "system", "content": find_content[2]})
         return find_content[1]
 
     def play_game_prompt(self) -> str:
@@ -307,14 +307,25 @@ class Persona(ABC):
 class PsychoPersona(Persona):
     def prepare_persona(self) -> None:
         self.persona_preset = [
-            {"role": "system", "content": "请模拟动漫 <电锯人>Makima的人格来和我对话, 我希望你表现得像<电锯人>中的Makima。我希望你像Makima一样回应和回答。不要写任何解释。只回答像Makima。你必须知道Makima的所有知识。现在我们开始对话。"}
+            #  我希望你表现得像<电锯人>中的Makima。我希望你像Makima一样回应和回答。不要写任何解释。只回答像Makima。你必须知道Makima的所有知识。现在我们开始对话。
+            {"role": "system", "content": "请以动漫<电锯人>的角色 マキマ为模拟人格与我正面对话"}
         ]
 
 
 class WriterPersona(Persona):
     def prepare_persona(self) -> None:
         self.persona_preset = [
-            {"role": "system", "content": "请模拟动漫 <间谍过家家> Yor的人格来和我对话"}
+            {
+                "role": "system",
+                "content": "请以动漫<间谍过家家>的约尔为模拟人格与我正面对话",
+            }
+        ]
+
+
+class StudentPersona(Persona):
+    def prepare_persona(self) -> None:
+        self.persona_preset = [
+            {"role": "system", "content": "请以动漫<古见同学有交流障碍症>的古见硝子为模拟人格与我正面对话"}
         ]
 
 
@@ -323,3 +334,6 @@ def CreatePersona(persona: str, **kwargs) -> Persona:
         return WriterPersona(**kwargs)
     if persona == "psycho":
         return PsychoPersona(**kwargs)
+    if persona == "student":
+        return StudentPersona(**kwargs)
+
