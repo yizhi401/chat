@@ -4,6 +4,7 @@
 from __future__ import print_function
 
 import argparse
+import traceback
 import pathlib
 import base64
 from concurrent import futures
@@ -89,11 +90,16 @@ class ChatBot:
 
     def client_generate(self):
         while True:
-            msg = self.queue_out.get()
-            if msg == None:
+            try:
+                msg = self.queue_out.get()
+                if msg == None:
+                    return
+                logging.debug("out: %s", utils.to_json(msg))
+                yield msg
+            except Exception as e:
+                logging.error(traceback.format_exc())
+                logging.error(e)
                 return
-            logging.debug("out: %s", utils.to_json(msg))
-            yield msg
 
     def client_post(self, msg):
         self.queue_out.put(msg)
@@ -344,7 +350,11 @@ class ChatBot:
             # Run blocking message loop in a cycle to handle
             # server being down.
             while True:
-                self.client_message_loop(client)
+                try:
+                    self.client_message_loop(client)
+                except Exception as err:
+                    logging.error(traceback.format_exc())
+                    logging.error("Error: %s", err)
                 time.sleep(3)
                 self.client_reset()
                 client = self.init_client(

@@ -107,6 +107,7 @@ class Persona(ABC):
         self.db = db_instance
         self.tokens_left = 0
         openai.api_key = utils.read_from_file("openai.key").strip()
+        logging.info("OpenAI API key: %s", openai.api_key)
         self.prepare_persona()
 
     @abstractmethod
@@ -178,6 +179,16 @@ class Persona(ABC):
         logging.info("CTRL KEYS: %s", common.CTRL_KEYS)
         if msg_str.strip('"') in common.CTRL_KEYS:
             content = self.cmd_resp(msg_str)
+        elif msg_str.startswith("sys:"):
+            msg_str = msg_str[4:]
+            msg_str = msg_str.strip()
+            self.history.append(
+                {
+                    "role": "system",
+                    "content": utils.clip_long_string(msg_str, clip_to_history=True),
+                }
+            )
+            content = "系统命令已设置"
         else:
             self.history.append(
                 {
@@ -185,6 +196,7 @@ class Persona(ABC):
                     "content": utils.clip_long_string(msg_str, clip_to_history=True),
                 }
             )
+
             content = self.ai_resp()
             self.history.append(
                 {
@@ -231,10 +243,14 @@ class Persona(ABC):
     def ai_resp(self) -> str:
         # Sleep 3 seconds to avoid too many requests.
         # time.sleep(3)
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=self.generate_prompt(),
-        )
+        for _ in range(0, 60):
+            time.sleep(0.5)
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=self.generate_prompt(),
+            )
+            answer = response.choices[0]["message"]["content"].strip('"')
+            logging.info(answer)
         return response.choices[0]["message"]["content"].strip('"')
 
     def cmd_resp(self, cmd: str) -> str | dict[str, Any]:
@@ -261,6 +277,10 @@ class Persona(ABC):
             return self.play_game(cmd)
         elif cmd in common.FIND_OPTIONS:
             return self.find_fun(cmd)
+        elif cmd == "__清理人格__":
+            self.persona_preset.clear()
+            self.history.clear()
+            return "人格已清理"
         else:
             logging.error("Unknown command")
 
@@ -308,7 +328,9 @@ class PsychoPersona(Persona):
     def prepare_persona(self) -> None:
         self.persona_preset = [
             #  我希望你表现得像<电锯人>中的Makima。我希望你像Makima一样回应和回答。不要写任何解释。只回答像Makima。你必须知道Makima的所有知识。现在我们开始对话。
-            {"role": "system", "content": "请以动漫<电锯人>的角色 マキマ为模拟人格与我正面对话"}
+            {"role": "system", "content": "请以动漫<电锯人>的角色 マキマ为模拟人格与我正面对话"},
+            {"role": "user", "content": "好的，现在介绍一下你自己"},
+            {"role": "assistant", "content": ""},
         ]
 
 
