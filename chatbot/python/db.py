@@ -1,13 +1,10 @@
-from typing import Any
-
-# TODO DB module cannot use logging module.
-# import logging
+import logging
 import redis
 
 
 class Database:
     def __init__(self):
-        # print("Connecting to redis...")
+        logging.info("Connecting to redis...")
         self.redis = redis.Redis(
             host="47.103.17.145", port=8010, db=8, password="godword"
         )
@@ -15,16 +12,26 @@ class Database:
             host="47.103.17.145", port=8010, db=7, password="godword"
         )
 
-    def check_user_validity(self, chatbot: str, from_user_id: str) -> bool:
+    def get_user_validity(self, chatbot: str, from_user_id: str) -> tuple[bool, int]:
+        logging.debug("Checking user validity: %s", from_user_id)
         ttl_key = f"TTL:{chatbot}:{from_user_id}"
-        # print(ttl_key)
-        return self.redis_ttl.get(ttl_key) != None
+        token_left = self.redis.get(ttl_key)
+        if token_left == None:
+            return [False, 0]
+        tokens = int(token_left.decode("utf-8"))
+        return [True, tokens]
 
-    def get_user_data(self, from_user_id: str) -> bool:
-        pass
+    def save_tokens_left(self, chatbot: str, from_user_id: str, tokens_left: int):
+        logging.debug("Decreasing tokens for user %s : %s",
+                      from_user_id, tokens_left)
+        ttl_key = f"TTL:{chatbot}:{from_user_id}"
+        self.redis.set(ttl_key, str(tokens_left))
 
-    def save_user_data(self, from_user_id: str, data: Any):
-        pass
+    def get_user_data(self, from_user_id: str) -> str:
+        json_data = self.redis.get(from_user_id)
+        if json_data == None:
+            return ""
+        return json_data.decode("utf-8")
 
-
-db = Database()
+    def save_user_data(self, from_user_id: str, json_data: str):
+        self.redis.set(from_user_id, json_data)

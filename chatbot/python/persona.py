@@ -2,6 +2,7 @@
 import requests
 import logging
 import random
+from db import Database
 import time
 import json
 import base64
@@ -12,6 +13,7 @@ from typing import Any
 from PIL import Image
 import os
 from io import BytesIO as memory_io
+from enum import Enum
 
 # Import generated grpc modules
 from tinode_grpc import pb
@@ -80,17 +82,13 @@ class Persona(ABC):
     history: list[dict[str, str]]
     feeling: int
     photos_root: pathlib.Path
-    photo_pool: dict[pathlib.Path : int]
-    cmds: list[str] = [
-        "命令",
-        "看照片",
-        "查状态",
-    ]
+    photo_pool: dict[pathlib.Path: int]
     tid: int
     topic: str
     last_cmd: str
 
-    def __init__(self, topic: str, photos: pathlib.Path) -> None:
+    def __init__(self, from_user_id: str, topic: str, photos: pathlib.Path, db_instance: Database) -> None:
+        self.from_user_id = from_user_id
         self.topic = topic
         self.photos_root = photos
         self.photo_pool = {}
@@ -98,6 +96,8 @@ class Persona(ABC):
         self.tid = 100
         self.last_cmd = ""
         self.history = []
+        self.db = db_instance
+        self.tokens_left = 0
         openai.api_key = utils.read_from_file("openai.key").strip()
         self.prepare_persona()
 
@@ -106,6 +106,56 @@ class Persona(ABC):
         pass
 
     def publish_msg(self, msg: str):
+        self._load_from_db()
+        self._publish_msg(msg)
+        self._save_to_db()
+
+    def set_tokens_left(self, tokens_left: int):
+        self.tokens_left = tokens_left
+
+    def _load_from_db(self):
+        json_str = self.db.get_user_data(self.from_user_id)
+        if json_str == "":
+            logging.info("Find no user data for %s in db",
+                         self.from_user_id)
+            return
+        json_data = json.loads(json_str)
+        self.feeling = json_data["feeling"]
+        if self.feeling > 10 and len(self.photo_pool) == 0:
+            # Reload photo_pools. Because we do not save what photos
+            # are seen before by the user, we make all the
+            # photos unread as a bonus.
+            self._reload_photo_pool()
+
+    def _reload_photo_pool(self):
+        for i in range(0, int(self.feeling / 10)):
+            level_path = self.photos_root / f"lv{i}"
+            if level_path.exists():
+                for photo in level_path.iterdir():
+                    self.photo_pool[photo] = 1
+
+    def _load_photo_pool(self):
+        # Arrived at a new level
+        level_path = self.photos_root / f"lv{int(self.feeling / 10)}"
+        logging.info(f"Arrived at level {int(self.feeling / 10)}")
+        logging.info("Level photos path: " + str(level_path))
+        if level_path.exists():
+            available_photo = []
+            for photo in level_path.iterdir():
+                available_photo.append(photo)
+            # Choose 2-4 photos to add to the pool
+            for _ in range(0, random.randint(2, 4)):
+                logging.info("Add photo to pool %s", photo)
+                photo = random.choice(available_photo)
+                self.photo_pool[photo] = 1
+
+    def _save_to_db(self):
+        json_data = {
+            "feeling": self.feeling,
+        }
+        self.db.save_user_data(self.from_user_id, json.dumps(json_data))
+
+    def _publish_msg(self, msg: str):
         head = {}
         head["mime"] = utils.encode_to_bytes("text/x-drafty")
 
@@ -113,8 +163,7 @@ class Persona(ABC):
 
         msg_str = msg.decode("utf-8")
         print("Received:", msg_str)
-        print(self.cmds)
-        if msg_str.strip('"') in self.cmds:
+        if msg_str.strip('"') in common.CTRL_CMDS:
             content = self.cmd_resp(msg_str)
         else:
             self.history.append(
@@ -156,19 +205,7 @@ class Persona(ABC):
         self.feeling += 1
         logging.info("Feeling: %d", self.feeling)
         if self.feeling % 10 == 0:
-            # Arrived at a new level
-            level_path = self.photos_root / f"lv{int(self.feeling / 10)}"
-            logging.info(f"Arrived at level {int(self.feeling / 10)}")
-            logging.info("Level photos path: " + str(level_path))
-            if level_path.exists():
-                available_photo = []
-                for photo in level_path.iterdir():
-                    available_photo.append(photo)
-                # Choose 2-4 photos to add to the pool
-                for _ in range(0, random.randint(2, 4)):
-                    logging.info("Add photo to pool %s", photo)
-                    photo = random.choice(available_photo)
-                    self.photo_pool[photo] = 1
+            self._load_photo_pool()
 
     def generate_prompt(self) -> list[dict[str, str]]:
         messages = []
@@ -189,23 +226,61 @@ class Persona(ABC):
     def cmd_resp(self, cmd: str) -> str | dict[str, Any]:
         cmd = cmd.strip('"')
         if cmd == "命令":
-            return """可以使用的命令：\n
-            [命令]：查看命令列表\n
-            [查状态]：查看当前状态\n
-            [看照片]：随机展示一张照片\n
-            """
+            available_cmd = "可以使用的命令："
+            for key, val in common.CTRL_CMDS.items():
+                available_cmd += f"\n[{key}]：{val}"
+            return available_cmd
         elif cmd == "查状态":
             _unread_photos = sum(self.photo_pool.values())
             return f"""当前状态:
-            好感度：{self.feeling}
-            已解锁照片：{_unread_photos}/{len(self.photo_pool)}
-            """
+好感度：{self.feeling}
+已解锁照片：{_unread_photos}/{len(self.photo_pool)}
+剩余次数：{self.tokens_left}"""
         elif cmd == "看照片":
             return self.get_next_photo()
+        elif cmd == "玩游戏":
+            return self.play_game_prompt()
+        elif cmd == "发现":
+            return self.find_fun_prompt()
+        elif cmd in common.GAME_OPTIONS:
+            return self.play_game(cmd)
+        elif cmd in common.FIND_OPTIONS:
+            return self.find_fun(cmd)
         else:
             print("Unknown command")
 
         return None
+
+    def play_game(self, cmd):
+        self.history.clear()
+        game_content = common.GAME_OPTIONS[cmd]
+        self.history.append({
+            {"role": "system", "content": common.GAME_PROMPT}
+        })
+        self.history.append({
+            {"role": "assistant", "content": game_content[1]}
+        })
+        return game_content[1]
+
+    def find_fun(self, cmd):
+        self.history.clear()
+        find_content = common.FIND_OPTIONS[cmd]
+        self.history.append({
+            {"role": "system", "content": find_content[2]}
+        })
+        return find_content[1]
+
+    def play_game_prompt(self) -> str:
+        game_prompt = "你想去哪里冒险呢？"
+        for key, _ in common.GAME_OPTIONS.items():
+            game_prompt += f"\n[{key}]"
+        return game_prompt
+
+    def find_fun_prompt(self) -> str:
+        find_prompt = "下面是我还可以做的事情："
+        for key, val in common.FIND_OPTIONS.items():
+            find_prompt += f"\n[{key}]：{val[0]}"
+        return find_prompt
 
     def get_next_photo(self) -> str | dict[str, Any]:
         if self.last_cmd.strip('"') == "看照片":
@@ -223,7 +298,7 @@ class Persona(ABC):
 class PsychoPersona(Persona):
     def prepare_persona(self) -> None:
         self.persona_preset = [
-            {"role": "system", "content": "请模拟动漫 <电锯人> Makima的人格来和我对话"}
+            {"role": "system", "content": "请模拟动漫 <电锯人>Makima的人格来和我对话, 我希望你表现得像<电锯人>中的Makima。我希望你像Makima一样回应和回答。不要写任何解释。只回答像Makima。你必须知道Makima的所有知识。现在我们开始对话。"}
         ]
 
 

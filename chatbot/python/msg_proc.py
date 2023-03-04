@@ -4,6 +4,7 @@ import multiprocessing
 import model_pb2 as pb
 import model_pb2_grpc as pbx
 from persona import Persona, CreatePersona
+from db import Database
 from db import db
 import utils
 import common
@@ -43,6 +44,7 @@ def process_chat(
 ):
     tid = 100
     utils.config_logging()
+    db_instance = Database()
     while True:
         msg = queue_in.get()
         if msg == None:
@@ -56,20 +58,40 @@ def process_chat(
         # # Insert a small delay to prevent accidental DoS self-attack.
         time.sleep(0.1)
 
-        if not db.check_user_validity(bot_name, msg.data.from_user_id):
+        ttl_valid, tokens_left = db_instance.get_user_valid(
+            bot_name, msg.data.from_user_id)
+        if not ttl_valid:
             # Respond with with chat persona for this topic.
             queue_out.put(
-                publish_msg(common.COMMON_MSG["USER_INVALID"], tid, msg.data.topic)
+                publish_msg(
+                    common.COMMON_MSG["USER_TTL_INVALID"], tid, msg.data.topic)
             )
             continue
 
-        logging.info("User %s is valid", msg.data.from_user_id)
+        if tokens_left <= 0:
+            queue_out.put(
+                publish_msg(
+                    common.COMMON_MSG["USER_TOKEN_INVALID"], tid, msg.data.topic)
+            )
+            continue
+
+        if msg.data.content.decode('utf-8').strip('"') not in common.CTRL_CMDS:
+            tokens_left -= 1
+            db_instance.save_tokens_left(
+                bot_name, msg.data.from_user_id, tokens_left)
+
+        logging.info("%s: User %s is valid", bot_name, msg.data.from_user_id)
 
         if msg.data.from_user_id in friends:
             chat_persona = friends[msg.data.from_user_id]
         else:
-            chat_persona = CreatePersona(persona, msg.data.topic, photos_root)
+            chat_persona = CreatePersona(
+                msg.data.from_user_id,
+                persona, msg.data.topic, photos_root, db_instance)
             friends[msg.data.from_user_id] = chat_persona
+
+        # Update current tokens left
+        chat_persona.set_tokens_left(tokens_left)
         try:
             # Respond with with chat persona for this topic.
             msg = chat_persona.publish_msg(msg.data.content)
@@ -77,5 +99,6 @@ def process_chat(
         except Exception as e:
             logging.error("Error in publish_msg %s", e)
             queue_out.put(
-                publish_msg(common.COMMON_MSG["INTERNAL_ERROR"], tid, msg.data.topic)
+                publish_msg(
+                    common.COMMON_MSG["INTERNAL_ERROR"], tid, msg.data.topic)
             )

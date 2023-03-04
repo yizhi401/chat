@@ -1,5 +1,6 @@
 import json
 import logging
+import pathlib
 import os
 import datetime
 import common
@@ -43,11 +44,13 @@ def config_logging():
     process_id = os.getpid()
     # Set logfile name with date
     logfile_name = f"chatbot[{process_id}]-{time_str}" + ".log"
+    logs_dir = pathlib.Path("logs")
+    logs_dir.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s %(levelname)s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        filename=logfile_name,
+        filename=logs_dir / logfile_name,
         filemode="w",
     )
     logging.getLogger("grpc").setLevel(logging.INFO)
