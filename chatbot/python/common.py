@@ -32,6 +32,9 @@ FIND_OPTIONS: dict[str, str] = {
     "为我写诗": ["给我一个主题，为你写一首诗", "你想写一首怎样的诗？", "我要你扮演诗人。你将创作出能唤起情感并具有触动人心的力量的诗歌。写任何主题或主题，但要确保您的文字以优美而有意义的方式传达您试图表达的感觉。您还可以想出一些短小的诗句，这些诗句仍然足够强大，可以在读者的脑海中留下印记。下面是我想要的诗歌。"],
 }
 
+CTRL_KEYS = list(FIND_OPTIONS.keys()) + \
+    list(GAME_OPTIONS.keys()) + list(CTRL_CMDS.keys())
+
 APP_NAME = "Tino-chatbot"
 APP_VERSION = "1.2.2"
 LIB_VERSION = pkg_resources.get_distribution("tinode_grpc").version

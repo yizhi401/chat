@@ -17,10 +17,13 @@ def encode_to_bytes(src):
 
 
 # Shorten long strings for logging.
-def clip_long_string(obj):
+def clip_long_string(obj, clip_to_history=False):
     if isinstance(obj, str):
         if len(obj) > common.MAX_LOG_LEN:
-            return "<" + str(len(obj)) + " bytes: " + obj[:12] + "..." + obj[-12:] + ">"
+            if clip_to_history:
+                return obj[:common.MAX_LOG_LEN] + "..."
+            else:
+                return "<" + str(len(obj)) + " bytes: " + obj[:12] + "..." + obj[-12:] + ">"
         return obj
     elif isinstance(obj, (list, tuple)):
         return [clip_long_string(item) for item in obj]
@@ -52,6 +55,7 @@ def config_logging():
         datefmt="%Y-%m-%d %H:%M:%S",
         filename=logs_dir / logfile_name,
         filemode="w",
+        encoding="utf-8",
     )
     logging.getLogger("grpc").setLevel(logging.INFO)
     logging.getLogger("grpc._channel").setLevel(logging.INFO)

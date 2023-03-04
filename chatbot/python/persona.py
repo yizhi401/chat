@@ -69,7 +69,7 @@ def inline_image(filename: pathlib.Path):
         im.close()
         return result
     except IOError as err:
-        print("Failed processing image '" + filename + "':", err)
+        logging.error("Failed processing image '" + filename + "':", err)
         return None
 
 
@@ -87,7 +87,8 @@ class Persona(ABC):
     topic: str
     last_cmd: str
 
-    def __init__(self, from_user_id: str, topic: str, photos: pathlib.Path, db_instance: Database) -> None:
+    def __init__(self, bot_name: str, from_user_id: str, topic: str, photos: pathlib.Path, db_instance: Database) -> None:
+        self.bot_name = bot_name
         self.from_user_id = from_user_id
         self.topic = topic
         self.photos_root = photos
@@ -107,19 +108,23 @@ class Persona(ABC):
 
     def publish_msg(self, msg: str):
         self._load_from_db()
-        self._publish_msg(msg)
+        reslut = self._publish_msg(msg)
         self._save_to_db()
+        return reslut
 
     def set_tokens_left(self, tokens_left: int):
         self.tokens_left = tokens_left
 
     def _load_from_db(self):
-        json_str = self.db.get_user_data(self.from_user_id)
+        json_str = self.db.get_user_data(
+            f"{self.from_user_id}-{self.bot_name}")
+        logging.info("Load from db: %s", json_str)
         if json_str == "":
             logging.info("Find no user data for %s in db",
                          self.from_user_id)
             return
         json_data = json.loads(json_str)
+        logging.info("Load from db: %s", json_data)
         self.feeling = json_data["feeling"]
         if self.feeling > 10 and len(self.photo_pool) == 0:
             # Reload photo_pools. Because we do not save what photos
@@ -153,30 +158,32 @@ class Persona(ABC):
         json_data = {
             "feeling": self.feeling,
         }
-        self.db.save_user_data(self.from_user_id, json.dumps(json_data))
+        logging.debug("Save to db: %s", json_data)
+        self.db.save_user_data(
+            f"{self.from_user_id}-{self.bot_name}", json.dumps(json_data))
 
-    def _publish_msg(self, msg: str):
+    def _publish_msg(self, msg_str: str):
         head = {}
         head["mime"] = utils.encode_to_bytes("text/x-drafty")
 
         self.tid += 1
 
-        msg_str = msg.decode("utf-8")
-        print("Received:", msg_str)
-        if msg_str.strip('"') in common.CTRL_CMDS:
+        logging.info("Received: %s", msg_str)
+        logging.info("CTRL KEYS: %s", common.CTRL_KEYS)
+        if msg_str.strip('"') in common.CTRL_KEYS:
             content = self.cmd_resp(msg_str)
         else:
             self.history.append(
                 {
                     "role": "user",
-                    "content": utils.clip_long_string(msg_str),
+                    "content": utils.clip_long_string(msg_str, clip_to_history=True),
                 }
             )
             content = self.ai_resp()
             self.history.append(
                 {
                     "role": "assistant",
-                    "content": utils.clip_long_string(content),
+                    "content": utils.clip_long_string(content, clip_to_history=True),
                 }
             )
             if len(self.history) > common.MAX_HISTORY_DATA:
@@ -188,6 +195,8 @@ class Persona(ABC):
 
         if not content:
             return None
+
+        logging.info("Reply: %s", content)
 
         self.last_cmd = msg_str
 
@@ -220,11 +229,11 @@ class Persona(ABC):
             model="gpt-3.5-turbo",
             messages=self.generate_prompt(),
         )
-        print(response.choices[0]["message"]["content"])
         return response.choices[0]["message"]["content"].strip('"')
 
     def cmd_resp(self, cmd: str) -> str | dict[str, Any]:
         cmd = cmd.strip('"')
+        logging.debug("Received command: %s", cmd)
         if cmd == "命令":
             available_cmd = "可以使用的命令："
             for key, val in common.CTRL_CMDS.items():
@@ -247,27 +256,27 @@ class Persona(ABC):
         elif cmd in common.FIND_OPTIONS:
             return self.find_fun(cmd)
         else:
-            print("Unknown command")
+            logging.error("Unknown command")
 
         return None
 
     def play_game(self, cmd):
         self.history.clear()
         game_content = common.GAME_OPTIONS[cmd]
-        self.history.append({
+        self.history.append(
             {"role": "system", "content": common.GAME_PROMPT}
-        })
-        self.history.append({
-            {"role": "assistant", "content": game_content[1]}
-        })
-        return game_content[1]
+        )
+        self.history.append(
+            {"role": "assistant", "content": game_content}
+        )
+        return game_content
 
     def find_fun(self, cmd):
         self.history.clear()
         find_content = common.FIND_OPTIONS[cmd]
-        self.history.append({
+        self.history.append(
             {"role": "system", "content": find_content[2]}
-        })
+        )
         return find_content[1]
 
     def play_game_prompt(self) -> str:
@@ -309,8 +318,8 @@ class WriterPersona(Persona):
         ]
 
 
-def CreatePersona(persona: str, topic: str, photos_root: pathlib.Path) -> Persona:
+def CreatePersona(persona: str, **kwargs) -> Persona:
     if persona == "writer":
-        return WriterPersona(topic, photos_root)
+        return WriterPersona(**kwargs)
     if persona == "psycho":
-        return PsychoPersona(topic, photos_root)
+        return PsychoPersona(**kwargs)

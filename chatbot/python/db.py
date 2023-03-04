@@ -5,9 +5,8 @@ import redis
 class Database:
     def __init__(self):
         logging.info("Connecting to redis...")
-        self.redis = redis.Redis(
-            host="47.103.17.145", port=8010, db=8, password="godword"
-        )
+        self.redis = redis.Redis(host="47.103.17.145",
+                                 port=8010, db=8, password="godword")
         self.redis_ttl = redis.Redis(
             host="47.103.17.145", port=8010, db=7, password="godword"
         )
@@ -15,17 +14,18 @@ class Database:
     def get_user_validity(self, chatbot: str, from_user_id: str) -> tuple[bool, int]:
         logging.debug("Checking user validity: %s", from_user_id)
         ttl_key = f"TTL:{chatbot}:{from_user_id}"
-        token_left = self.redis.get(ttl_key)
+        token_left = self.redis_ttl.get(ttl_key)
         if token_left == None:
             return [False, 0]
         tokens = int(token_left.decode("utf-8"))
+        logging.debug("User %s has %s tokens left", from_user_id, tokens)
         return [True, tokens]
 
     def save_tokens_left(self, chatbot: str, from_user_id: str, tokens_left: int):
         logging.debug("Decreasing tokens for user %s : %s",
                       from_user_id, tokens_left)
         ttl_key = f"TTL:{chatbot}:{from_user_id}"
-        self.redis.set(ttl_key, str(tokens_left))
+        self.redis_ttl.set(ttl_key, str(tokens_left))
 
     def get_user_data(self, from_user_id: str) -> str:
         json_data = self.redis.get(from_user_id)
@@ -34,4 +34,5 @@ class Database:
         return json_data.decode("utf-8")
 
     def save_user_data(self, from_user_id: str, json_data: str):
+        logging.debug("Saving user data for %s: %s", from_user_id, json_data)
         self.redis.set(from_user_id, json_data)

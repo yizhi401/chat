@@ -5,8 +5,8 @@ import model_pb2 as pb
 import model_pb2_grpc as pbx
 from persona import Persona, CreatePersona
 from db import Database
-from db import db
 import utils
+import traceback
 import common
 
 friends: dict[str, Persona] = {}
@@ -58,7 +58,7 @@ def process_chat(
         # # Insert a small delay to prevent accidental DoS self-attack.
         time.sleep(0.1)
 
-        ttl_valid, tokens_left = db_instance.get_user_valid(
+        ttl_valid, tokens_left = db_instance.get_user_validity(
             bot_name, msg.data.from_user_id)
         if not ttl_valid:
             # Respond with with chat persona for this topic.
@@ -75,7 +75,8 @@ def process_chat(
             )
             continue
 
-        if msg.data.content.decode('utf-8').strip('"') not in common.CTRL_CMDS:
+        msg_str = msg.data.content.decode('utf-8').strip('"')
+        if msg_str not in common.CTRL_KEYS:
             tokens_left -= 1
             db_instance.save_tokens_left(
                 bot_name, msg.data.from_user_id, tokens_left)
@@ -86,18 +87,24 @@ def process_chat(
             chat_persona = friends[msg.data.from_user_id]
         else:
             chat_persona = CreatePersona(
-                msg.data.from_user_id,
-                persona, msg.data.topic, photos_root, db_instance)
+                persona=persona,
+                bot_name=bot_name,
+                from_user_id=msg.data.from_user_id,
+                topic=msg.data.topic,
+                photos=photos_root,
+                db_instance=db_instance
+            )
             friends[msg.data.from_user_id] = chat_persona
 
         # Update current tokens left
         chat_persona.set_tokens_left(tokens_left)
         try:
             # Respond with with chat persona for this topic.
-            msg = chat_persona.publish_msg(msg.data.content)
+            msg = chat_persona.publish_msg(msg_str)
             queue_out.put(msg)
         except Exception as e:
             logging.error("Error in publish_msg %s", e)
+            logging.error(traceback.format_exc())
             queue_out.put(
                 publish_msg(
                     common.COMMON_MSG["INTERNAL_ERROR"], tid, msg.data.topic)
