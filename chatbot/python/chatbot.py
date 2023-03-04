@@ -323,7 +323,7 @@ class ChatBot:
             # log("Loaded {} quotes".format(load_quotes(args.quotes)))
 
             # Start Plugin server
-            server = self.init_server(args.listen)
+            # server = self.init_server(args.listen)
 
             # Initialize and launch client
             client = self.init_client(
@@ -333,7 +333,7 @@ class ChatBot:
             # Setup closure for graceful termination
             def exit_gracefully(signo, stack_frame):
                 logging.info("Terminated with signal %s ", signo)
-                server.stop(0)
+                # server.stop(0)
                 client.cancel()
                 sys.exit(0)
 
@@ -357,7 +357,7 @@ class ChatBot:
                 )
 
             # Close connections gracefully before exiting
-            server.stop(None)
+            # server.stop(None)
             client.cancel()
 
         else:

@@ -230,7 +230,7 @@ class Persona(ABC):
 
     def ai_resp(self) -> str:
         # Sleep 3 seconds to avoid too many requests.
-        time.sleep(3)
+        # time.sleep(3)
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=self.generate_prompt(),
@@ -336,4 +336,3 @@ def CreatePersona(persona: str, **kwargs) -> Persona:
         return PsychoPersona(**kwargs)
     if persona == "student":
         return StudentPersona(**kwargs)
-
