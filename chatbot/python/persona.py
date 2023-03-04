@@ -124,7 +124,7 @@ class Persona(ABC):
         self.tokens_left = tokens_left
 
     def _load_from_db(self):
-        json_str = self.db.get_user_data(f"{self.from_user_id}-{self.bot_name}")
+        json_str = self.db.get_user_data(f"{self.from_user_id}:{self.bot_name}")
         logging.info("Load from db: %s", json_str)
         if json_str == "":
             logging.info("Find no user data for %s in db", self.from_user_id)
@@ -161,12 +161,12 @@ class Persona(ABC):
                 self.photo_pool[photo] = 1
 
     def _save_to_db(self):
-        json_data = {
+        json_data ={
             "feeling": self.feeling,
         }
         logging.debug("Save to db: %s", json_data)
         self.db.save_user_data(
-            f"{self.from_user_id}-{self.bot_name}", json.dumps(json_data)
+            f"{self.from_user_id}:{self.bot_name}", json.dumps(json_data)
         )
 
     def _publish_msg(self, msg_str: str):
