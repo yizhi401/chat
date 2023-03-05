@@ -264,7 +264,9 @@ class ChatBot:
                             msg.pres.what == pb.ServerPres.OFF
                             and self.subscriptions.get(msg.pres.src) != None
                         ):
-                            self.client_post(self.leave(msg.pres.src))
+                            logging.info("OFF msg received from %s", msg.pres.src)
+                            # Chatbot never leave.
+                            # self.client_post(self.leave(msg.pres.src))
 
                 else:
                     # Ignore everything else
