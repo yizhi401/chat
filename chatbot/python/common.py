@@ -60,4 +60,4 @@ APP_VERSION = "1.2.2"
 LIB_VERSION = pkg_resources.get_distribution("tinode_grpc").version
 
 # Maximum length of string to log. Shorten longer strings.
-MAX_LOG_LEN = 64
+MAX_LOG_LEN = 128

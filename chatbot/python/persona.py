@@ -140,15 +140,12 @@ class Persona(ABC):
 
     def _reload_photo_pool(self):
         for i in range(0, int(self.feeling / 10)):
-            level_path = self.photos_root / f"lv{i}"
-            if level_path.exists():
-                for photo in level_path.iterdir():
-                    self.photo_pool[photo] = 1
+            self._load_photo_pool((i + 1) * 10)
 
-    def _load_photo_pool(self):
+    def _load_photo_pool(self, feeling):
         # Arrived at a new level
-        level_path = self.photos_root / f"lv{int(self.feeling / 10)}"
-        logging.info(f"Arrived at level {int(self.feeling / 10)}")
+        level_path = self.photos_root / f"lv{int(feeling / 10)}"
+        logging.info(f"Arrived at level {int(feeling / 10)}")
         logging.info("Level photos path: " + str(level_path))
         if level_path.exists():
             available_photo = []
@@ -161,7 +158,7 @@ class Persona(ABC):
                 self.photo_pool[photo] = 1
 
     def _save_to_db(self):
-        json_data ={
+        json_data = {
             "feeling": self.feeling,
         }
         logging.debug("Save to db: %s", json_data)
@@ -232,7 +229,7 @@ class Persona(ABC):
         self.feeling += 1
         logging.info("Feeling: %d", self.feeling)
         if self.feeling % 10 == 0:
-            self._load_photo_pool()
+            self._load_photo_pool(self.feeling)
 
     def generate_prompt(self) -> list[dict[str, str]]:
         messages = []

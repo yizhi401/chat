@@ -21,7 +21,7 @@ def clip_long_string(obj, clip_to_history=False):
     if isinstance(obj, str):
         if len(obj) > common.MAX_LOG_LEN:
             if clip_to_history:
-                return obj[: common.MAX_LOG_LEN] + "..."
+                return obj[: common.MAX_LOG_LEN]
             else:
                 return (
                     "<"
