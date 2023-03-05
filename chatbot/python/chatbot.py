@@ -356,6 +356,10 @@ class ChatBot:
                     logging.error(traceback.format_exc())
                     logging.error("Error: %s", err)
                 time.sleep(3)
+                # Close connections gracefully before exiting
+                # server.stop(None)
+                client.cancel()
+
                 self.client_reset()
                 client = self.init_client(
                     args.host,
@@ -365,10 +369,6 @@ class ChatBot:
                     args.ssl,
                     args.ssl_host,
                 )
-
-            # Close connections gracefully before exiting
-            # server.stop(None)
-            client.cancel()
 
         else:
             logging.error("Error: authentication scheme not defined")

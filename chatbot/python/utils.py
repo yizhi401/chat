@@ -21,9 +21,17 @@ def clip_long_string(obj, clip_to_history=False):
     if isinstance(obj, str):
         if len(obj) > common.MAX_LOG_LEN:
             if clip_to_history:
-                return obj[:common.MAX_LOG_LEN] + "..."
+                return obj[: common.MAX_LOG_LEN] + "..."
             else:
-                return "<" + str(len(obj)) + " bytes: " + obj[:12] + "..." + obj[-12:] + ">"
+                return (
+                    "<"
+                    + str(len(obj))
+                    + " bytes: "
+                    + obj[:12]
+                    + "..."
+                    + obj[-12:]
+                    + ">"
+                )
         return obj
     elif isinstance(obj, (list, tuple)):
         return [clip_long_string(item) for item in obj]
@@ -51,7 +59,7 @@ def config_logging():
     logs_dir.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.DEBUG,
-        format="%(asctime)s %(levelname)s %(message)s",
+        format="%(asctime)s %(levelname)s %(filename)s:%(lineno)d %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         filename=logs_dir / logfile_name,
         filemode="w",
