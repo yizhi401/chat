@@ -109,9 +109,25 @@ class ChatBot:
     def client_reset(self):
         # Drain the queue
         try:
+            logging.info("Draining the out queue...")
             while self.queue_out.get(False) != None:
                 pass
         except Exception as e:
+            logging.error(traceback.format_exc())
+            logging.error(e)
+
+        try:
+            logging.info("Closing the queue...")
+            self.queue_out.close()
+            self.queue_out = multiprocessing.Queue()
+            logging.info("Clearing the processors...")
+            for proc in self.processors.values():
+                proc[0].close()
+                proc[1].terminate()
+                proc[1].join()
+            self.processors.clear()
+        except Exception as e:
+            logging.error(traceback.format_exc())
             logging.error(e)
 
     def hello(self):
