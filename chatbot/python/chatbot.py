@@ -41,6 +41,8 @@ class ChatBot:
 
         # List of active subscriptions
         self.subscriptions = {}
+        # Keep grpc channel from being collected.
+        self.channel = None
 
         # Message Queue
         self.queue_out = multiprocessing.Queue()
@@ -69,7 +71,8 @@ class ChatBot:
                     logging.error("Error: {} {} ({})".format(code, text, tid))
                     onerror = bundle.get("onerror")
                     if onerror:
-                        onerror(bundle.get("arg"), {"code": code, "text": text})
+                        onerror(bundle.get("arg"), {
+                                "code": code, "text": text})
             except Exception as err:
                 logging.error("Error handling server response", err)
 
@@ -195,15 +198,17 @@ class ChatBot:
             "SNI=" + ssl_host if ssl_host else "",
         )
 
-        channel = None
+        self.channel = None
         if secure:
-            opts = (("grpc.ssl_target_name_override", ssl_host),) if ssl_host else None
-            channel = grpc.secure_channel(addr, grpc.ssl_channel_credentials(), opts)
+            opts = (("grpc.ssl_target_name_override",
+                    ssl_host),) if ssl_host else None
+            self.channel = grpc.secure_channel(
+                addr, grpc.ssl_channel_credentials(), opts)
         else:
-            channel = grpc.insecure_channel(addr)
+            self.channel = grpc.insecure_channel(addr)
 
         # Call the server
-        stream = pbx.NodeStub(channel).MessageLoop(self.client_generate())
+        stream = pbx.NodeStub(self.channel).MessageLoop(self.client_generate())
 
         # Session initialization sequence: {hi}, {login}, {sub topic='me'}
         self.client_post(self.hello())
@@ -264,7 +269,8 @@ class ChatBot:
                             msg.pres.what == pb.ServerPres.OFF
                             and self.subscriptions.get(msg.pres.src) != None
                         ):
-                            logging.info("OFF msg received from %s", msg.pres.src)
+                            logging.info(
+                                "OFF msg received from %s", msg.pres.src)
                             # Chatbot never leave.
                             # self.client_post(self.leave(msg.pres.src))
 
@@ -322,7 +328,8 @@ class ChatBot:
             """Try reading the cookie file"""
             try:
                 schema, secret = self.read_auth_cookie(args.login_cookie)
-                logging.info("Logging in with cookie file %s", args.login_cookie)
+                logging.info("Logging in with cookie file %s",
+                             args.login_cookie)
             except Exception as err:
                 logging.info("Failed to read authentication cookie %s", err)
 
@@ -412,7 +419,8 @@ def server_version(params):
     if params == None:
         return
     logging.info(
-        "Server: %s, %s", params["build"].decode("ascii"), params["ver"].decode("ascii")
+        "Server: %s, %s", params["build"].decode(
+            "ascii"), params["ver"].decode("ascii")
     )
 
 
@@ -430,6 +438,7 @@ class Plugin(pbx.PluginServicer):
         else:
             action = "unknown"
 
-        logging.info("Account", action, ":", acc_event.user_id, acc_event.public)
+        logging.info("Account", action, ":",
+                     acc_event.user_id, acc_event.public)
 
         return pb.Unused()
