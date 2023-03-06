@@ -71,8 +71,7 @@ class ChatBot:
                     logging.error("Error: {} {} ({})".format(code, text, tid))
                     onerror = bundle.get("onerror")
                     if onerror:
-                        onerror(bundle.get("arg"), {
-                                "code": code, "text": text})
+                        onerror(bundle.get("arg"), {"code": code, "text": text})
             except Exception as err:
                 logging.error("Error handling server response", err)
 
@@ -200,10 +199,10 @@ class ChatBot:
 
         self.channel = None
         if secure:
-            opts = (("grpc.ssl_target_name_override",
-                    ssl_host),) if ssl_host else None
+            opts = (("grpc.ssl_target_name_override", ssl_host),) if ssl_host else None
             self.channel = grpc.secure_channel(
-                addr, grpc.ssl_channel_credentials(), opts)
+                addr, grpc.ssl_channel_credentials(), opts
+            )
         else:
             self.channel = grpc.insecure_channel(addr)
 
@@ -269,8 +268,7 @@ class ChatBot:
                             msg.pres.what == pb.ServerPres.OFF
                             and self.subscriptions.get(msg.pres.src) != None
                         ):
-                            logging.info(
-                                "OFF msg received from %s", msg.pres.src)
+                            logging.info("OFF msg received from %s", msg.pres.src)
                             # Chatbot never leave.
                             # self.client_post(self.leave(msg.pres.src))
 
@@ -328,8 +326,7 @@ class ChatBot:
             """Try reading the cookie file"""
             try:
                 schema, secret = self.read_auth_cookie(args.login_cookie)
-                logging.info("Logging in with cookie file %s",
-                             args.login_cookie)
+                logging.info("Logging in with cookie file %s", args.login_cookie)
             except Exception as err:
                 logging.info("Failed to read authentication cookie %s", err)
 
@@ -364,12 +361,14 @@ class ChatBot:
                 except Exception as err:
                     logging.error(traceback.format_exc())
                     logging.error("Error: %s", err)
+                logging.error("Disconnected. Reconnecting in 3 seconds...")
                 time.sleep(3)
                 # Close connections gracefully before exiting
                 # server.stop(None)
-                client.cancel()
-
+                logging.info("Resetting client")
                 self.client_reset()
+                client.cancel()
+                logging.info("Reconnecting")
                 client = self.init_client(
                     args.host,
                     schema,
@@ -412,15 +411,17 @@ class ChatBot:
 def login_error(unused, errcode):
     # Check for 409 "already authenticated".
     if errcode.get("code") != 409:
+        logging.info("Login failed: %s", errcode.get("text"))
         exit(1)
+    else:
+        logging.info("Already authenticated")
 
 
 def server_version(params):
     if params == None:
         return
     logging.info(
-        "Server: %s, %s", params["build"].decode(
-            "ascii"), params["ver"].decode("ascii")
+        "Server: %s, %s", params["build"].decode("ascii"), params["ver"].decode("ascii")
     )
 
 
@@ -438,7 +439,6 @@ class Plugin(pbx.PluginServicer):
         else:
             action = "unknown"
 
-        logging.info("Account", action, ":",
-                     acc_event.user_id, acc_event.public)
+        logging.info("Account", action, ":", acc_event.user_id, acc_event.public)
 
         return pb.Unused()

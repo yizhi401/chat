@@ -272,7 +272,7 @@ class Persona(ABC):
             return self.play_game(cmd)
         elif cmd in common.FIND_OPTIONS:
             return self.find_fun(cmd)
-        elif cmd == "__清理人格__":
+        elif cmd == "清理人格":
             self.persona_preset.clear()
             self.history.clear()
             return "人格已清理"

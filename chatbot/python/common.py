@@ -49,7 +49,7 @@ FIND_OPTIONS: dict[str, str] = {
 }
 
 CTRL_KEYS = (
-    ["__清理人格__"]
+    ["清理人格"]
     + list(FIND_OPTIONS.keys())
     + list(GAME_OPTIONS.keys())
     + list(CTRL_CMDS.keys())
