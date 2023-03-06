@@ -118,6 +118,7 @@ class Persona(ABC):
         self._load_from_db()
         reslut = self._publish_msg(msg)
         self._save_to_db()
+        logging.info("Publish msg done")
         return reslut
 
     def set_tokens_left(self, tokens_left: int):
@@ -245,7 +246,7 @@ class Persona(ABC):
             messages=self.generate_prompt(),
         )
         answer = response.choices[0]["message"]["content"].strip('"')
-        logging.info(answer)
+        # logging.info(answer)
         return answer
 
     def cmd_resp(self, cmd: str) -> str | dict[str, Any]:
