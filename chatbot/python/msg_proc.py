@@ -9,7 +9,7 @@ import utils
 import traceback
 import common
 
-friends: dict[str, Persona] = {}
+friends = {}
 
 
 def note_read(topic, seq):

@@ -78,15 +78,6 @@ class Persona(ABC):
     Cannot share data between topics.
     """
 
-    persona_preset: list[dict[str, Any]] = []
-    history: list[dict[str, str]]
-    feeling: int
-    photos_root: pathlib.Path
-    photo_pool: dict[pathlib.Path : int]
-    tid: int
-    topic: str
-    last_cmd: str
-
     def __init__(
         self,
         bot_name: str,
@@ -106,6 +97,7 @@ class Persona(ABC):
         self.history = []
         self.db = db_instance
         self.tokens_left = 0
+        self.persona_preset = []
         openai.api_key = utils.read_from_file("openai.key").strip()
         logging.info("OpenAI API key: %s", openai.api_key)
         self.prepare_persona()
@@ -124,7 +116,8 @@ class Persona(ABC):
         self.tokens_left = tokens_left
 
     def _load_from_db(self):
-        json_str = self.db.get_user_data(f"{self.from_user_id}:{self.bot_name}")
+        json_str = self.db.get_user_data(
+            f"{self.from_user_id}:{self.bot_name}")
         logging.info("Load from db: %s", json_str)
         if json_str == "":
             logging.info("Find no user data for %s in db", self.from_user_id)
@@ -176,7 +169,7 @@ class Persona(ABC):
         logging.info("CTRL KEYS: %s", common.CTRL_KEYS)
         if msg_str.strip('"') in common.CTRL_KEYS:
             content = self.cmd_resp(msg_str)
-        elif msg_str.startswith("sys:"):
+        elif msg_str.lower().startswith("sys"):
             msg_str = msg_str[4:]
             msg_str = msg_str.strip()
             self.history.append(
@@ -186,6 +179,42 @@ class Persona(ABC):
                 }
             )
             content = "系统命令已设置"
+        elif msg_str.lower().startswith("user"):
+            msg_str = msg_str[5:]
+            msg_str = msg_str.strip()
+            self.history.append(
+                {
+                    "role": "user",
+                    "content": utils.clip_long_string(msg_str, clip_to_history=True),
+                }
+            )
+            content = "用户回复已设置"
+        elif msg_str.lower().startswith("ai"):
+            msg_str = msg_str[3:]
+            msg_str = msg_str.strip()
+            self.history.append(
+                {
+                    "role": "assistant",
+                    "content": utils.clip_long_string(msg_str, clip_to_history=True),
+                }
+            )
+            content = "AI回复已设置"
+        elif msg_str.lower().startswith("his"):
+            msg_str = msg_str[4:]
+            msg_str = msg_str.strip()
+            if msg_str == "clear":
+                self.history = []
+                content = "历史记录已清空"
+            if msg_str == "del":
+                _content = self.history.pop()
+                content = "历史记录已删除最后一条, 删除的是：" + _content["content"]
+        elif msg_str.lower() == 'echo':
+            content = "预制信息是: \n"
+            for his in self.persona_preset:
+                content += his['role'] + ": " + his['content'] + '\n'
+            content += "聊天历史记录是：\n"
+            for his in self.history:
+                content += his['role'] + ": " + his['content'] + '\n'
         else:
             self.history.append(
                 {
@@ -231,7 +260,8 @@ class Persona(ABC):
         if self.feeling % 10 == 0:
             self._load_photo_pool(self.feeling)
 
-    def generate_prompt(self) -> list[dict[str, str]]:
+    def generate_prompt(self):
+        """Returns list[dict[str, str]]."""
         messages = []
         messages.extend(self.persona_preset)
         messages.extend(self.history)
@@ -248,7 +278,9 @@ class Persona(ABC):
         logging.info(answer)
         return answer
 
-    def cmd_resp(self, cmd: str) -> str | dict[str, Any]:
+    def cmd_resp(self, cmd: str):
+        """Returns str | dict[str, Any]
+        """
         cmd = cmd.strip('"')
         logging.debug("Received command: %s", cmd)
         if cmd == "命令":
