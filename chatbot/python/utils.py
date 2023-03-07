@@ -63,7 +63,7 @@ def config_logging():
         datefmt="%Y-%m-%d %H:%M:%S",
         filename=logs_dir / logfile_name,
         filemode="w",
-        encoding="utf-8",
+        # encoding="utf-8",
     )
     logging.getLogger("grpc").setLevel(logging.INFO)
     logging.getLogger("grpc._channel").setLevel(logging.INFO)

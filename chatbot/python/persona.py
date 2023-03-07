@@ -117,8 +117,7 @@ class Persona(ABC):
         self.tokens_left = tokens_left
 
     def _load_from_db(self):
-        json_str = self.db.get_user_data(
-            f"{self.from_user_id}:{self.bot_name}")
+        json_str = self.db.get_user_data(f"{self.from_user_id}:{self.bot_name}")
         logging.info("Load from db: %s", json_str)
         if json_str == "":
             logging.info("Find no user data for %s in db", self.from_user_id)
@@ -209,13 +208,13 @@ class Persona(ABC):
             if msg_str == "del":
                 _content = self.history.pop()
                 content = "历史记录已删除最后一条, 删除的是：" + _content["content"]
-        elif msg_str.lower() == 'echo':
+        elif msg_str.lower() == "echo":
             content = "预制信息是: \n"
             for his in self.persona_preset:
-                content += his['role'] + ": " + his['content'] + '\n'
+                content += his["role"] + ": " + his["content"] + "\n"
             content += "聊天历史记录是：\n"
             for his in self.history:
-                content += his['role'] + ": " + his['content'] + '\n'
+                content += his["role"] + ": " + his["content"] + "\n"
         else:
             self.history.append(
                 {
@@ -280,8 +279,7 @@ class Persona(ABC):
         return answer
 
     def cmd_resp(self, cmd: str):
-        """Returns str | dict[str, Any]
-        """
+        """Returns str | dict[str, Any]"""
         cmd = cmd.strip('"')
         logging.debug("Received command: %s", cmd)
         if cmd == "命令":
@@ -339,7 +337,7 @@ class Persona(ABC):
             find_prompt += f"\n[{key}]：{val[0]}"
         return find_prompt
 
-    def get_next_photo(self) -> str | dict[str, Any]:
+    def get_next_photo(self):
         if self.last_cmd.strip('"') == "看照片":
             return "刚刚发过了嘛，不能总是看照片啦！"
         unread_photos = [
