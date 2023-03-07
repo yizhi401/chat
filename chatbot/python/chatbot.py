@@ -282,7 +282,7 @@ class ChatBot:
                 else:
                     # Ignore everything else
                     pass
-                logging.debug("msg %s processed.", utils.to_json(msg))
+                logging.debug("msg processed: %s", utils.to_json(msg))
 
         except grpc._channel._Rendezvous as err:
             logging.error("Disconnected: %s", err)

@@ -1,6 +1,7 @@
 __pycache__
-photos
-openai.key
+/chatbot/python/photos
+/chatbot/python/runtime
+/chatbot/python/openai.key
+/chatbot/python/logs
 chatbot*.log
 .tn-cookie
-runtime

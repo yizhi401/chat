@@ -46,12 +46,7 @@ def process_chat(
     )
     if msg == None:
         return
-    logging.info(
-        "Logging for bot_name: %s, user_id: %s, topic: %s",
-        bot_name,
-        msg.data.from_user_id,
-        msg.data.topic,
-    )
+    time.sleep(3)
     # Respond to message.
     # Mark received message as read.
     queue_out.put(note_read(msg.data.topic, msg.data.seq_id))
