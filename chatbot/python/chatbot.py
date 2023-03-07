@@ -69,8 +69,7 @@ class ChatBot:
                     logging.error("Error: {} {} ({})".format(code, text, tid))
                     onerror = bundle.get("onerror")
                     if onerror:
-                        onerror(bundle.get("arg"), {
-                                "code": code, "text": text})
+                        onerror(bundle.get("arg"), {"code": code, "text": text})
             except Exception as err:
                 logging.error("Error handling server response", err)
 
@@ -215,8 +214,7 @@ class ChatBot:
 
         self.channel = None
         if secure:
-            opts = (("grpc.ssl_target_name_override",
-                    ssl_host),) if ssl_host else None
+            opts = (("grpc.ssl_target_name_override", ssl_host),) if ssl_host else None
             self.channel = grpc.secure_channel(
                 addr, grpc.ssl_channel_credentials(), opts
             )
@@ -234,28 +232,19 @@ class ChatBot:
         return stream
 
     def process_data_msg(self, msg):
-        logging.debug(msg)
-
-        if msg.data.from_user_id in self.processors:
-            chat_queue = self.processors[msg.data.from_user_id][0]
-        else:
-            chat_queue = multiprocessing.Queue()
-            processor = multiprocessing.Process(
-                target=process_chat,
-                args=(
-                    chat_queue,
-                    self.queue_out,
-                    self.login_basic,
-                    self.persona,
-                    self.photos_root,
-                ),
-            )
-            processor.daemon = True
-            processor.start()
-            self.processors[msg.data.from_user_id] = [chat_queue, processor]
-
-        # Put incoming message to the queue.
-        chat_queue.put(msg)
+        processor = multiprocessing.Process(
+            target=process_chat,
+            args=(
+                msg,
+                self.next_id(),
+                self.queue_out,
+                self.login_basic,
+                self.persona,
+                self.photos_root,
+            ),
+        )
+        processor.daemon = True
+        processor.start()
 
     def client_message_loop(self, stream):
         try:
@@ -286,14 +275,14 @@ class ChatBot:
                             msg.pres.what == pb.ServerPres.OFF
                             and self.subscriptions.get(msg.pres.src) != None
                         ):
-                            logging.info(
-                                "OFF msg received from %s", msg.pres.src)
+                            logging.info("OFF msg received from %s", msg.pres.src)
                             # Chatbot never leave.
                             # self.client_post(self.leave(msg.pres.src))
 
                 else:
                     # Ignore everything else
                     pass
+                logging.debug("msg %s processed.", utils.to_json(msg))
 
         except grpc._channel._Rendezvous as err:
             logging.error("Disconnected: %s", err)
@@ -345,8 +334,7 @@ class ChatBot:
             """Try reading the cookie file"""
             try:
                 schema, secret = self.read_auth_cookie(args.login_cookie)
-                logging.info("Logging in with cookie file %s",
-                             args.login_cookie)
+                logging.info("Logging in with cookie file %s", args.login_cookie)
             except Exception as err:
                 logging.info("Failed to read authentication cookie %s", err)
 
@@ -441,8 +429,7 @@ def server_version(params):
     if params == None:
         return
     logging.info(
-        "Server: %s, %s", params["build"].decode(
-            "ascii"), params["ver"].decode("ascii")
+        "Server: %s, %s", params["build"].decode("ascii"), params["ver"].decode("ascii")
     )
 
 
@@ -460,7 +447,6 @@ class Plugin(pbx.PluginServicer):
         else:
             action = "unknown"
 
-        logging.info("Account", action, ":",
-                     acc_event.user_id, acc_event.public)
+        logging.info("Account", action, ":", acc_event.user_id, acc_event.public)
 
         return pb.Unused()

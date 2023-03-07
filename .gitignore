@@ -3,3 +3,4 @@ photos
 openai.key
 chatbot*.log
 .tn-cookie
+runtime

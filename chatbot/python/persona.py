@@ -89,6 +89,7 @@ class Persona(ABC):
         self.from_user_id = from_user_id
         self.topic = topic
         self.photos_root = photos
+        # The following data needs to be save locally.
         self.photo_pool = {}
         self.feeling = 0
         self.tid = 100
@@ -96,19 +97,60 @@ class Persona(ABC):
         self.history = []
         self.tokens_left = 0
         self.persona_preset = []
-        self.role_prompt = ""
+        # End of data to be saved locally.
+
         openai.api_key = utils.read_from_file("openai.key").strip()
         logging.info("OpenAI API key: %s", openai.api_key)
+        self.role_prompt = ""
         self.prepare_persona()
+        self.local_data_folder = pathlib.Path("runtime")
+        self.local_data_folder.mkdir(parents=True, exist_ok=True)
+        # First need to load from local file if exists.
+        self._load_data_from_local()
 
     @abstractmethod
     def prepare_persona(self) -> None:
         pass
 
+    def _get_local_file_name(self):
+        return f"{self.from_user_id}_{self.bot_name}_{self.topic}.json"
+
+    def _load_data_from_local(self):
+        if not (self.local_data_folder / self._get_local_file_name()).exists():
+            # No local data file, a new user.
+            return
+        with open(
+            self.local_data_folder / self._get_local_file_name(), "r", encoding="utf-8"
+        ) as f:
+            json_data = json.load(f)
+            self.feeling = json_data["feeling"]
+            self.photo_pool = json_data["photo_pool"]
+            self.tid = json_data["tid"]
+            self.last_cmd = json_data["last_cmd"]
+            self.history = json_data["history"]
+            self.tokens_left = json_data["tokens_left"]
+            self.persona_preset = json_data["persona_preset"]
+
+    def _save_data_to_local(self):
+        json_data = {
+            "feeling": self.feeling,
+            "photo_pool": self.photo_pool,
+            "tid": self.tid,
+            "last_cmd": self.last_cmd,
+            "history": self.history,
+            "tokens_left": self.tokens_left,
+            "persona_preset": self.persona_preset,
+        }
+        with open(
+            self.local_data_folder / self._get_local_file_name(), "w", encoding="utf-8"
+        ) as f:
+            json.dump(json_data, f)
+
     def publish_msg(self, msg: str):
         self._load_from_db()
         reslut = self._publish_msg(msg)
         self._save_to_db()
+        self._save_data_to_local()
         logging.info("Publish msg done")
         return reslut
 
@@ -147,7 +189,7 @@ class Persona(ABC):
             for _ in range(0, random.randint(2, 4)):
                 logging.info("Add photo to pool %s", photo)
                 photo = random.choice(available_photo)
-                self.photo_pool[photo] = 1
+                self.photo_pool[str(photo)] = 1
 
     def _save_to_db(self):
         json_data = {
@@ -346,7 +388,7 @@ class Persona(ABC):
             return "暂时没有可以看的照片啦，和我聊聊天，解锁更多的照片把！"
         photo = random.choice(unread_photos)
         self.photo_pool[photo] = 0
-        return inline_image(photo)
+        return inline_image(pathlib.Path(photo))
 
 
 class PsychoPersona(Persona):

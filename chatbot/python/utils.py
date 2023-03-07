@@ -50,19 +50,24 @@ def read_from_file(file_path) -> str:
         return f.read()
 
 
-def config_logging():
+def config_logging(logfile_name: str = ""):
     time_str = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     process_id = os.getpid()
     # Set logfile name with date
-    logfile_name = f"chatbot[{process_id}]-{time_str}" + ".log"
+    if logfile_name == "":
+        logfile_name = f"chatbot[{process_id}]-{time_str}" + ".log"
     logs_dir = pathlib.Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(
+        logs_dir / logfile_name, mode="a", encoding="utf-8"
+    )
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s %(levelname)s %(filename)s:%(lineno)d %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        filename=logs_dir / logfile_name,
-        filemode="w",
+        handlers={file_handler},
+        # filename=logs_dir / logfile_name,
+        # filemode="a",
         # encoding="utf-8",
     )
     logging.getLogger("grpc").setLevel(logging.INFO)
