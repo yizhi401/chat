@@ -388,6 +388,10 @@ class Persona(ABC):
             return "暂时没有可以看的照片啦，和我聊聊天，解锁更多的照片把！"
         photo = random.choice(unread_photos)
         self.photo_pool[photo] = 0
+        self.history.append({"role": "user", "content": "我：看照片"})
+        self.history.append(
+            {"role": "assistant", "content": self.role_prompt + "我刚刚发了一张照片给你。"}
+        )
         return inline_image(pathlib.Path(photo))
 
 

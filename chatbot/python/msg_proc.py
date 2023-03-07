@@ -46,7 +46,6 @@ def process_chat(
     )
     if msg == None:
         return
-    time.sleep(3)
     # Respond to message.
     # Mark received message as read.
     queue_out.put(note_read(msg.data.topic, msg.data.seq_id))
