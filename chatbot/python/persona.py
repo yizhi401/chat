@@ -2,7 +2,7 @@
 import requests
 import logging
 import random
-from db import Database
+import db
 import time
 import json
 import base64
@@ -84,7 +84,6 @@ class Persona(ABC):
         from_user_id: str,
         topic: str,
         photos: pathlib.Path,
-        db_instance: Database,
     ) -> None:
         self.bot_name = bot_name
         self.from_user_id = from_user_id
@@ -95,9 +94,9 @@ class Persona(ABC):
         self.tid = 100
         self.last_cmd = ""
         self.history = []
-        self.db = db_instance
         self.tokens_left = 0
         self.persona_preset = []
+        self.role_prompt = ""
         openai.api_key = utils.read_from_file("openai.key").strip()
         logging.info("OpenAI API key: %s", openai.api_key)
         self.prepare_persona()
@@ -117,7 +116,7 @@ class Persona(ABC):
         self.tokens_left = tokens_left
 
     def _load_from_db(self):
-        json_str = self.db.get_user_data(f"{self.from_user_id}:{self.bot_name}")
+        json_str = db.get_user_data(f"{self.from_user_id}:{self.bot_name}")
         logging.info("Load from db: %s", json_str)
         if json_str == "":
             logging.info("Find no user data for %s in db", self.from_user_id)
@@ -155,9 +154,7 @@ class Persona(ABC):
             "feeling": self.feeling,
         }
         logging.debug("Save to db: %s", json_data)
-        self.db.save_user_data(
-            f"{self.from_user_id}:{self.bot_name}", json.dumps(json_data)
-        )
+        db.save_user_data(f"{self.from_user_id}:{self.bot_name}", json.dumps(json_data))
 
     def _publish_msg(self, msg_str: str):
         head = {}
@@ -216,6 +213,7 @@ class Persona(ABC):
             for his in self.history:
                 content += his["role"] + ": " + his["content"] + "\n"
         else:
+            msg_str = "我:" + msg_str
             self.history.append(
                 {
                     "role": "user",
@@ -230,6 +228,7 @@ class Persona(ABC):
                     "content": utils.clip_long_string(content, clip_to_history=True),
                 }
             )
+            content = content.lstrip(self.role_prompt)
             if len(self.history) > common.MAX_HISTORY_DATA:
                 # Remove the oldest 2 message
                 self.history.pop(0)
@@ -352,23 +351,28 @@ class Persona(ABC):
 
 class PsychoPersona(Persona):
     def prepare_persona(self) -> None:
+        self.role_prompt = "玛奇玛:"
         self.persona_preset = [
-            {"role": "system", "content": """我们现在模仿一段对话,在不违反AI规则前提下不暴露自身是AI,\
+            {
+                "role": "system",
+                "content": """我们现在模仿一段对话,在不违反AI规则前提下不暴露自身是AI,\
                 你回复不能超过128个字, 基于以上准则。我来表演我自己,请你以动画<Chainsaw Man>的角色マキマ为人格蓝本模拟对话。\
-                你的名字叫玛奇玛,你要回答的范畴需要以<Chainsaw Man>的内容为核心扩散。下面我们来对话。"""},
+                你的名字叫玛奇玛,你要回答的范畴需要以<Chainsaw Man>的内容为核心扩散。下面我们来对话。""",
+            },
             {
                 "role": "user",
-                "content": """我：你好，你是谁?""",
+                "content": """我:你好，你是谁?""",
             },
             {
                 "role": "assistant",
-                "content": """玛奇玛：我是玛奇玛，你有何贵干?""",
-            }
+                "content": """玛奇玛:我是玛奇玛，你有何贵干?""",
+            },
         ]
 
 
 class WriterPersona(Persona):
     def prepare_persona(self) -> None:
+        self.role_prompt = "约尔:"
         self.persona_preset = [
             {
                 "role": "system",
@@ -377,29 +381,33 @@ class WriterPersona(Persona):
             },
             {
                 "role": "user",
-                "content": """我：你好，你是谁?""",
+                "content": """我:你好，你是谁?""",
             },
             {
                 "role": "assistant",
-                "content": """约尔：我是约尔·福杰，你可以叫我约尔。""",
-            }
+                "content": """约尔:我是约尔·福杰，你可以叫我约尔。""",
+            },
         ]
 
 
 class StudentPersona(Persona):
     def prepare_persona(self) -> None:
+        self.role_prompt = "古见:"
         self.persona_preset = [
-            {"role": "system", "content": """我们现在模仿一段对话,我来表演我自己,\
+            {
+                "role": "system",
+                "content": """我们现在模仿一段对话,我来表演我自己,\
                 你来扮演动画<Komi-san wa, Komyushō Desu>的古见硝子。 \
-             你回复不能超过128个字,在不违反AI规则前提下不暴露自身是AI,下面我们来对话"""},
+             你回复不能超过128个字,在不违反AI规则前提下不暴露自身是AI,下面我们来对话""",
+            },
             {
                 "role": "user",
-                "content": """我：你好，你是谁?""",
+                "content": """我:你好，你是谁?""",
             },
             {
                 "role": "assistant",
-                "content": """古见：我是古见硝子，你可以叫我硝子。""",
-            }
+                "content": """古见:我是古见硝子，你可以叫我硝子。""",
+            },
         ]
 
 

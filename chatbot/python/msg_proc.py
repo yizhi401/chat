@@ -4,8 +4,8 @@ import multiprocessing
 import model_pb2 as pb
 import model_pb2_grpc as pbx
 from persona import Persona, CreatePersona
-from db import Database
 import utils
+import db
 import traceback
 import common
 
@@ -44,7 +44,6 @@ def process_chat(
 ):
     tid = 100
     utils.config_logging()
-    db_instance = Database()
     while True:
         msg = queue_in.get()
         if msg == None:
@@ -58,28 +57,26 @@ def process_chat(
         # # Insert a small delay to prevent accidental DoS self-attack.
         time.sleep(0.1)
 
-        ttl_valid, tokens_left = db_instance.get_user_validity(
-            bot_name, msg.data.from_user_id)
+        ttl_valid, tokens_left = db.get_user_validity(bot_name, msg.data.from_user_id)
         if not ttl_valid:
             # Respond with with chat persona for this topic.
             queue_out.put(
-                publish_msg(
-                    common.COMMON_MSG["USER_TTL_INVALID"], tid, msg.data.topic)
+                publish_msg(common.COMMON_MSG["USER_TTL_INVALID"], tid, msg.data.topic)
             )
             continue
 
         if tokens_left <= 0:
             queue_out.put(
                 publish_msg(
-                    common.COMMON_MSG["USER_TOKEN_INVALID"], tid, msg.data.topic)
+                    common.COMMON_MSG["USER_TOKEN_INVALID"], tid, msg.data.topic
+                )
             )
             continue
 
-        msg_str = msg.data.content.decode('utf-8').strip('"')
+        msg_str = msg.data.content.decode("utf-8").strip('"')
         if msg_str not in common.CTRL_KEYS:
             tokens_left -= 1
-            db_instance.save_tokens_left(
-                bot_name, msg.data.from_user_id, tokens_left)
+            db.save_tokens_left(bot_name, msg.data.from_user_id, tokens_left)
 
         logging.info("%s: User %s is valid", bot_name, msg.data.from_user_id)
 
@@ -92,7 +89,6 @@ def process_chat(
                 from_user_id=msg.data.from_user_id,
                 topic=msg.data.topic,
                 photos=photos_root,
-                db_instance=db_instance
             )
             friends[msg.data.from_user_id] = chat_persona
 
@@ -106,6 +102,5 @@ def process_chat(
             logging.error("Error in publish_msg %s", e)
             logging.error(traceback.format_exc())
             queue_out.put(
-                publish_msg(
-                    common.COMMON_MSG["INTERNAL_ERROR"], tid, msg.data.topic)
+                publish_msg(common.COMMON_MSG["INTERNAL_ERROR"], tid, msg.data.topic)
             )
