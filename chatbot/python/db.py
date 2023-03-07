@@ -30,7 +30,8 @@ class Database:
             return [False, 0]
 
     def save_tokens_left(self, chatbot: str, from_user_id: str, tokens_left: int):
-        logging.debug("Decreasing tokens for user %s : %s", from_user_id, tokens_left)
+        logging.debug("Decreasing tokens for user %s : %s",
+                      from_user_id, tokens_left)
         ttl_key = f"TTL:{chatbot}:{from_user_id}"
         try:
             redis_ttl = redis.Redis(
