@@ -118,16 +118,17 @@ class ChatBot:
         try:
             logging.info("Closing the queue...")
             self.queue_out.close()
-            self.queue_out = multiprocessing.Queue()
             logging.info("Clearing the processors...")
             for proc in self.processors.values():
                 proc[0].close()
                 proc[1].terminate()
                 proc[1].join()
-            self.processors.clear()
         except Exception as e:
             logging.error(traceback.format_exc())
             logging.error(e)
+        self.processors.clear()
+        logging.info("Clearing the subscriptions...")
+        self.subscriptions.clear()
 
     def hello(self):
         tid = self.next_id()
@@ -222,6 +223,7 @@ class ChatBot:
         else:
             self.channel = grpc.insecure_channel(addr)
 
+        self.queue_out = multiprocessing.Queue()
         # Call the server
         stream = pbx.NodeStub(self.channel).MessageLoop(self.client_generate())
 
