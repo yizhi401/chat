@@ -243,7 +243,6 @@ class ChatBot:
         processor.start()
 
     def client_message_loop(self, stream):
-        print("Start processing... %s", datetime.now())
         try:
             # Read server responses
             for msg in stream:
