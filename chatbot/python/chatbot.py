@@ -35,7 +35,6 @@ class ChatBot:
         self.onCompletion = {}
         self.persona = persona
         self.photos_root = photos_root
-        self.processors = {}
 
         # List of active subscriptions
         self.subscriptions = {}
@@ -91,7 +90,9 @@ class ChatBot:
     def client_generate(self):
         while True:
             try:
-                msg = self.queue_out.get()
+                # If we cannot get any message from queue in 1 minute
+                # exit the current queue, causing the client to reconnect.
+                msg = self.queue_out.get(timeout=60)
                 if msg == None:
                     return
                 logging.debug("out: %s", utils.to_json(msg))
@@ -118,14 +119,9 @@ class ChatBot:
             logging.info("Closing the queue...")
             self.queue_out.close()
             logging.info("Clearing the processors...")
-            for proc in self.processors.values():
-                proc[0].close()
-                proc[1].terminate()
-                proc[1].join()
         except Exception as e:
             logging.error(traceback.format_exc())
             logging.error(e)
-        self.processors.clear()
         logging.info("Clearing the subscriptions...")
         self.subscriptions.clear()
 
@@ -247,6 +243,7 @@ class ChatBot:
         processor.start()
 
     def client_message_loop(self, stream):
+        print("Start processing... %s", datetime.now())
         try:
             # Read server responses
             for msg in stream:
