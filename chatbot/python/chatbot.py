@@ -92,7 +92,7 @@ class ChatBot:
             try:
                 # If we cannot get any message from queue in 1 hour
                 # exit the current queue, causing the client to reconnect.
-                msg = self.queue_out.get(timeout=3600)
+                msg = self.queue_out.get(timeout=60)
                 if msg == None:
                     return
                 logging.debug("out: %s", utils.to_json(msg))
@@ -227,9 +227,6 @@ class ChatBot:
         # Session initialization sequence: {hi}, {login}, {sub topic='me'}
         self.client_post(self.hello())
         self.client_post(self.login(cookie_file_name, schema, secret))
-        # Subscribe post before.
-        for topic in self.subscriptions:
-            self.client_post(self.subscribe(topic, False))
 
         return stream
 
@@ -291,6 +288,9 @@ class ChatBot:
 
     def on_login(self, cookie_file_name, params):
         self.client_post(self.subscribe("me"))
+        # Subscribe post before.
+        for topic in self.subscriptions:
+            self.client_post(self.subscribe(topic, False))
 
         """Save authentication token to file"""
         if params == None or cookie_file_name == None:
