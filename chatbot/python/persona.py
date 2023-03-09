@@ -120,9 +120,9 @@ class Persona(ABC):
         # First need to load from local file if exists.
         self._load_data_from_local()
 
-    @abstractmethod
     def prepare_persona(self) -> None:
         for chat_mode in ChatMode:
+            logging.info("Preparing persona for %s", chat_mode)
             self.role_prompt[chat_mode] = ""
             self.history[chat_mode] = []
             self.persona_preset[chat_mode] = []
@@ -224,19 +224,21 @@ class Persona(ABC):
                 self.history[self.chat_mode])
             result = f"[{self.chat_mode}][历史]{result}"
         elif sys_cmd.module == "PRE":
-            self.persona_preset[self.chat_mode], rersult = sys_cmd.process(
+            self.persona_preset[self.chat_mode], result = sys_cmd.process(
                 self.persona_preset[self.chat_mode])
             result = f"[{self.chat_mode}][预设]{result}"
+        logging.debug("Resut: %s", result)
         return result
 
     def _proc_echo_cmd(self):
-        content = f"当前聊天模式：{self.chat_mode}"
-        content = "预设信息是: \n"
+        content = f"当前聊天模式：{self.chat_mode}\n"
+        content += "预设信息是: \n"
         for his in self.persona_preset[self.chat_mode]:
             content += his["role"] + ": " + his["content"] + "\n"
         content += "聊天历史记录是：\n"
         for his in self.history[self.chat_mode]:
             content += his["role"] + ": " + his["content"] + "\n"
+        return content
 
     def _proc_normal_chat(self, msg_str: str):
         if self.chat_mode == ChatMode.Chat:
@@ -274,10 +276,9 @@ class Persona(ABC):
         self.tid += 1
 
         logging.info("Received: %s", msg_str)
-        logging.info("CTRL KEYS: %s", common.CTRL_KEYS)
         if cmd_proc.check_if_command_valid(msg_str):
-            return self._proc_sys_cmd(msg_str)
-        if msg_str.strip('"') in common.CTRL_KEYS:
+            content = self._proc_sys_cmd(msg_str)
+        elif msg_str.strip('"') in common.CTRL_KEYS:
             content = self.cmd_resp(msg_str)
         elif msg_str.lower() == "echo":
             content = self._proc_echo_cmd()
@@ -287,7 +288,7 @@ class Persona(ABC):
             content = self._proc_normal_chat(msg_str)
 
         if not content:
-            return None
+            raise Exception("No reply")
 
         logging.info("Reply: %s", content)
 
@@ -339,6 +340,7 @@ class Persona(ABC):
         elif cmd == "查状态":
             _unread_photos = sum(self.photo_pool.values())
             return f"""当前状态:
+模式：{self.chat_mode}
 好感度：{self.feeling}
 已解锁照片：{_unread_photos}/{len(self.photo_pool)}
 剩余次数：{self.tokens_left}"""
@@ -425,7 +427,7 @@ class Persona(ABC):
 
 class PsychoPersona(Persona):
     def prepare_persona(self) -> None:
-        super()
+        super().prepare_persona()
         self.role_prompt[ChatMode.Chat] = "玛奇玛:"
         self.persona_preset[ChatMode.Chat] = [
             {
@@ -447,7 +449,7 @@ class PsychoPersona(Persona):
 
 class WriterPersona(Persona):
     def prepare_persona(self) -> None:
-        super()
+        super().prepare_persona()
         self.role_prompt[ChatMode.Chat] = "约尔:"
         self.persona_preset[ChatMode.Chat] = [
             {
@@ -468,7 +470,7 @@ class WriterPersona(Persona):
 
 class StudentPersona(Persona):
     def prepare_persona(self) -> None:
-        super()
+        super().prepare_persona()
         self.role_prompt[ChatMode.Chat] = "古见:"
         self.persona_preset[ChatMode.Chat] = [
             {

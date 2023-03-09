@@ -1,5 +1,6 @@
 import re
 import utils
+import logging
 
 # 系统命令格式（不区分大小写）：
 # [CMD][MODULE][ROLE][CONTENT]
@@ -33,12 +34,16 @@ class SysCmd:
         cmd_parts = cmd_str.split()
         if len(cmd_parts) == 2:
             self.cmd, self.module = cmd_parts
+            self.role = ""
+            self.content = ""
         elif len(cmd_parts) == 4:
             self.cmd, self.module, self.role, self.content = cmd_parts
         else:
             raise Exception(f"Invalid command: {cmd_str}")
         self.cmd = self.cmd.upper()
         self.module = self.module.upper()
+        logging.info(
+            f"SysCmd: {self.cmd} {self.module} {self.role} {self.content}")
 
     def process(self, current_list) -> list:
         result = ""
@@ -51,8 +56,11 @@ class SysCmd:
             )
             result = f"{self.role}命令已设置"
         elif self.cmd == "DEL":
-            current_list.pop()
-            result = "已删除最后一条记录"
+            if len(current_list) == 0:
+                result = "记录为空"
+            else:
+                current_list.pop()
+                result = "已删除最后一条记录"
         elif self.cmd == "POP":
             if len(current_list) > 0:
                 current_list.pop(0)
