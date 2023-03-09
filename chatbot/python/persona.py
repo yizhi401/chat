@@ -256,7 +256,7 @@ class Persona(ABC):
                 "content": utils.clip_long_string(content, clip_to_history=True),
             }
         )
-        content = content.lstrip(self.role_prompt[self.chat_mode])
+        content = content.lstrip(self.role_prompt[self.chat_mode]).strip(",.!?;:。，！？；：")
         if len(self.history[self.chat_mode]) > common.MAX_HISTORY_DATA:
             # Remove the oldest 2 message
             self.history[self.chat_mode].pop(0)

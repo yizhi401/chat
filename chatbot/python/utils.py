@@ -21,7 +21,7 @@ def clip_long_string(obj, clip_to_history=False):
     if isinstance(obj, str):
         if len(obj) > common.MAX_LOG_LEN:
             if clip_to_history:
-                return obj[: common.MAX_LOG_LEN]
+                return obj[: common.MAX_LOG_LEN].strip(",.!?;:。，！？；：")
             else:
                 return (
                     "<"
@@ -65,7 +65,7 @@ def config_logging(logfile_name: str = ""):
         level=logging.DEBUG,
         format="%(asctime)s %(levelname)s %(filename)s:%(lineno)d %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        handlers={file_handler},
+        # handlers={file_handler},
         # filename=logs_dir / logfile_name,
         # filemode="a",
         # encoding="utf-8",

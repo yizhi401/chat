@@ -25,6 +25,7 @@ import model_pb2 as pb
 import model_pb2_grpc as pbx
 from msg_proc import process_chat
 import multiprocessing
+import queue
 
 
 class ChatBot:
@@ -40,6 +41,8 @@ class ChatBot:
         self.subscriptions = {}
         # Keep grpc channel from being collected.
         self.channel = None
+
+        self.retry_time = 0
 
         # Message Queue
         self.queue_out = multiprocessing.Queue()
@@ -68,8 +71,7 @@ class ChatBot:
                     logging.error("Error: {} {} ({})".format(code, text, tid))
                     onerror = bundle.get("onerror")
                     if onerror:
-                        onerror(bundle.get("arg"), {
-                                "code": code, "text": text})
+                        onerror(bundle.get("arg"), {"code": code, "text": text})
             except Exception as err:
                 logging.error("Error handling server response", err)
 
@@ -93,11 +95,26 @@ class ChatBot:
             try:
                 # If we cannot get any message from queue in 10 mins
                 # exit the current queue, causing the client to reconnect.
-                msg = self.queue_out.get(timeout=600)
+                msg = self.queue_out.get(timeout=60)
                 if msg == None:
+                    logging.warn("Msg Is None.")
                     return
                 logging.debug("out: %s", utils.to_json(msg))
+                # Clear retry time.
+                self.retry_time = 0
                 yield msg
+            except queue.Empty as e:
+                logging.error(traceback.format_exc())
+                logging.error(e)
+                state = self.channel._channel.check_connectivity_state(False)
+                if state != grpc.ChannelConnectivity.READY.value[0]:
+                    logging.error("Grpc Channel is not ready. Exiting...")
+                    return
+                if self.retry_time > 10:
+                    logging.warn("Too many retries. Exiting...")
+                    return
+                else:
+                    self.retry_time += 1
             except Exception as e:
                 logging.error(traceback.format_exc())
                 logging.error(e)
@@ -214,8 +231,7 @@ class ChatBot:
 
         self.channel = None
         if secure:
-            opts = (("grpc.ssl_target_name_override",
-                    ssl_host),) if ssl_host else None
+            opts = (("grpc.ssl_target_name_override", ssl_host),) if ssl_host else None
             self.channel = grpc.secure_channel(
                 addr, grpc.ssl_channel_credentials(), opts
             )
@@ -252,7 +268,6 @@ class ChatBot:
             # Read server responses
             for msg in stream:
                 logging.debug("in: %s", utils.to_json(msg))
-
                 if msg.HasField("ctrl"):
                     # Run code on command completion
                     self.exec_future(
@@ -276,8 +291,7 @@ class ChatBot:
                             msg.pres.what == pb.ServerPres.OFF
                             and self.subscriptions.get(msg.pres.src) != None
                         ):
-                            logging.info(
-                                "OFF msg received from %s", msg.pres.src)
+                            logging.info("OFF msg received from %s", msg.pres.src)
                             # Chatbot never leave.
                             # self.client_post(self.leave(msg.pres.src))
 
@@ -339,8 +353,7 @@ class ChatBot:
             """Try reading the cookie file"""
             try:
                 schema, secret = self.read_auth_cookie(args.login_cookie)
-                logging.info("Logging in with cookie file %s",
-                             args.login_cookie)
+                logging.info("Logging in with cookie file %s", args.login_cookie)
             except Exception as err:
                 logging.info("Failed to read authentication cookie %s", err)
 
@@ -435,8 +448,7 @@ def server_version(params):
     if params == None:
         return
     logging.info(
-        "Server: %s, %s", params["build"].decode(
-            "ascii"), params["ver"].decode("ascii")
+        "Server: %s, %s", params["build"].decode("ascii"), params["ver"].decode("ascii")
     )
 
 
@@ -454,7 +466,6 @@ class Plugin(pbx.PluginServicer):
         else:
             action = "unknown"
 
-        logging.info("Account", action, ":",
-                     acc_event.user_id, acc_event.public)
+        logging.info("Account", action, ":", acc_event.user_id, acc_event.public)
 
         return pb.Unused()
