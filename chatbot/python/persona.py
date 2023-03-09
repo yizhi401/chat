@@ -10,6 +10,7 @@ import openai
 import pathlib
 from abc import ABC, abstractmethod
 from typing import Any
+import cmd_proc
 from PIL import Image
 import os
 from io import BytesIO as memory_io
@@ -215,6 +216,57 @@ class Persona(ABC):
         db.save_user_data(
             f"{self.from_user_id}:{self.bot_name}", json.dumps(json_data))
 
+    def _proc_sys_cmd(self, msg_str: str):
+        sys_cmd = cmd_proc.SysCmd(msg_str)
+        result = ""
+        if sys_cmd.module == "HIS":
+            self.history[self.chat_mode], result = sys_cmd.process(
+                self.history[self.chat_mode])
+            result = f"[{self.chat_mode}][历史]{result}"
+        elif sys_cmd.module == "PRE":
+            self.persona_preset[self.chat_mode], rersult = sys_cmd.process(
+                self.persona_preset[self.chat_mode])
+            result = f"[{self.chat_mode}][预设]{result}"
+        return result
+
+    def _proc_echo_cmd(self):
+        content = f"当前聊天模式：{self.chat_mode}"
+        content = "预设信息是: \n"
+        for his in self.persona_preset[self.chat_mode]:
+            content += his["role"] + ": " + his["content"] + "\n"
+        content += "聊天历史记录是：\n"
+        for his in self.history[self.chat_mode]:
+            content += his["role"] + ": " + his["content"] + "\n"
+
+    def _proc_normal_chat(self, msg_str: str):
+        if self.chat_mode == ChatMode.Chat:
+            msg_str = "我:" + msg_str
+        self.history[self.chat_mode].append(
+            {
+                "role": "user",
+                "content": utils.clip_long_string(msg_str, clip_to_history=True),
+            }
+        )
+        content = self.ai_resp()
+        self.history[self.chat_mode].append(
+            {
+                "role": "assistant",
+                "content": utils.clip_long_string(content, clip_to_history=True),
+            }
+        )
+        content = content.lstrip(self.role_prompt[self.chat_mode])
+        if len(self.history[self.chat_mode]) > common.MAX_HISTORY_DATA:
+            # Remove the oldest 2 message
+            self.history[self.chat_mode].pop(0)
+            self.history[self.chat_mode].pop(0)
+        # When user talk with ai, increase feeling according to the conversation
+        self.increase_feeling(msg_str, content)
+        return content
+
+    def _proc_reset_cmd(self):
+        self.prepare_persona()
+        return "人格已经重置"
+
     def _publish_msg(self, msg_str: str):
         head = {}
         head["mime"] = utils.encode_to_bytes("text/x-drafty")
@@ -223,78 +275,16 @@ class Persona(ABC):
 
         logging.info("Received: %s", msg_str)
         logging.info("CTRL KEYS: %s", common.CTRL_KEYS)
+        if cmd_proc.check_if_command_valid(msg_str):
+            return self._proc_sys_cmd(msg_str)
         if msg_str.strip('"') in common.CTRL_KEYS:
             content = self.cmd_resp(msg_str)
-        elif msg_str.lower().startswith("sys"):
-            msg_str = msg_str[4:]
-            msg_str = msg_str.strip()
-            self.history[self.chat_mode].append(
-                {
-                    "role": "system",
-                    "content": utils.clip_long_string(msg_str, clip_to_history=True),
-                }
-            )
-            content = "系统命令已设置"
-        elif msg_str.lower().startswith("user"):
-            msg_str = msg_str[5:]
-            msg_str = msg_str.strip()
-            self.history[self.chat_mode].append(
-                {
-                    "role": "user",
-                    "content": utils.clip_long_string(msg_str, clip_to_history=True),
-                }
-            )
-            content = "用户回复已设置"
-        elif msg_str.lower().startswith("ai"):
-            msg_str = msg_str[3:]
-            msg_str = msg_str.strip()
-            self.history[self.chat_mode].append(
-                {
-                    "role": "assistant",
-                    "content": utils.clip_long_string(msg_str, clip_to_history=True),
-                }
-            )
-            content = "AI回复已设置"
-        elif msg_str.lower().startswith("his"):
-            msg_str = msg_str[4:]
-            msg_str = msg_str.strip()
-            if msg_str == "clear":
-                self.history[self.chat_mode] = []
-                content = "历史记录已清空"
-            if msg_str == "del":
-                _content = self.history[self.chat_mode].pop()
-                content = "历史记录已删除最后一条, 删除的是：" + _content["content"]
         elif msg_str.lower() == "echo":
-            content = "预制信息是: \n"
-            for his in self.persona_preset[self.chat_mode]:
-                content += his["role"] + ": " + his["content"] + "\n"
-            content += "聊天历史记录是：\n"
-            for his in self.history[self.chat_mode]:
-                content += his["role"] + ": " + his["content"] + "\n"
+            content = self._proc_echo_cmd()
+        elif msg_str.lower() == "reset":
+            content = self._proc_reset_cmd()
         else:
-            if self.chat_mode == ChatMode.Chat:
-                msg_str = "我:" + msg_str
-            self.history[self.chat_mode].append(
-                {
-                    "role": "user",
-                    "content": utils.clip_long_string(msg_str, clip_to_history=True),
-                }
-            )
-
-            content = self.ai_resp()
-            self.history[self.chat_mode].append(
-                {
-                    "role": "assistant",
-                    "content": utils.clip_long_string(content, clip_to_history=True),
-                }
-            )
-            content = content.lstrip(self.role_prompt[self.chat_mode])
-            if len(self.history[self.chat_mode]) > common.MAX_HISTORY_DATA:
-                # Remove the oldest 2 message
-                self.history[self.chat_mode].pop(0)
-                self.history[self.chat_mode].pop(0)
-            # When user talk with ai, increase feeling according to the conversation
-            self.increase_feeling(msg_str, content)
+            content = self._proc_normal_chat(msg_str)
 
         if not content:
             return None
@@ -358,24 +348,34 @@ class Persona(ABC):
             return self.play_game_prompt()
         elif cmd == "发现":
             return self.find_fun_prompt()
+        elif cmd == "聊天":
+            return self.switch_to_chat_mod()
+        elif cmd == "自由":
+            return self.switch_to_free_mod()
+
         elif cmd in common.GAME_OPTIONS:
             return self.play_game(cmd)
         elif cmd in common.FIND_OPTIONS:
             return self.find_fun(cmd)
-        elif cmd == "清理人格":
-            self.persona_preset[self.chat_mode].clear()
-            self.history[self.chat_mode].clear()
-            return "人格已清理"
         else:
             logging.error("Unknown command")
 
         return None
 
+    def switch_to_chat_mod(self):
+        self.chat_mode = ChatMode.Chat
+        return "已切换到聊天模式"
+
+    def switch_to_free_mod(self):
+        self.chat_mode = ChatMode.Free
+        return "已切换到自由模式"
+
     def play_game(self, cmd):
         self.chat_mode = ChatMode.Game
+        self.persona_preset[self.chat_mode].clear()
         self.history[self.chat_mode].clear()
         game_content = common.GAME_OPTIONS[cmd]
-        self.history[self.chat_mode].append(
+        self.persona_preset[self.chat_mode].append(
             {"role": "system", "content": common.GAME_PROMPT})
         self.history[self.chat_mode].append(
             {"role": "assistant", "content": game_content})
@@ -383,9 +383,10 @@ class Persona(ABC):
 
     def find_fun(self, cmd):
         self.chat_mode = ChatMode.Find
+        self.persona_preset[self.chat_mode].clear()
         self.history[self.chat_mode].clear()
         find_content = common.FIND_OPTIONS[cmd]
-        self.history[self.chat_mode].append(
+        self.persona_preset[self.chat_mode].append(
             {"role": "system", "content": find_content[2]})
         return find_content[1]
 
