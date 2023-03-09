@@ -35,7 +35,6 @@ class ChatBot:
         self.onCompletion = {}
         self.persona = persona
         self.photos_root = photos_root
-        self.processors = {}
 
         # List of active subscriptions
         self.subscriptions = {}
@@ -91,7 +90,9 @@ class ChatBot:
     def client_generate(self):
         while True:
             try:
-                msg = self.queue_out.get()
+                # If we cannot get any message from queue in 1 hour
+                # exit the current queue, causing the client to reconnect.
+                msg = self.queue_out.get(timeout=3600)
                 if msg == None:
                     return
                 logging.debug("out: %s", utils.to_json(msg))
@@ -118,16 +119,11 @@ class ChatBot:
             logging.info("Closing the queue...")
             self.queue_out.close()
             logging.info("Clearing the processors...")
-            for proc in self.processors.values():
-                proc[0].close()
-                proc[1].terminate()
-                proc[1].join()
         except Exception as e:
             logging.error(traceback.format_exc())
             logging.error(e)
-        self.processors.clear()
-        logging.info("Clearing the subscriptions...")
-        self.subscriptions.clear()
+        # logging.info("Clearing the subscriptions...")
+        # self.subscriptions.clear()
 
     def hello(self):
         tid = self.next_id()
@@ -166,18 +162,21 @@ class ChatBot:
         )
         return pb.ClientMsg(login=pb.ClientLogin(id=tid, scheme=scheme, secret=secret))
 
-    def subscribe(self, topic):
+    def subscribe(self, topic, add_to_future=True):
         tid = self.next_id()
-        self.add_future(
-            tid,
-            {
-                "arg": topic,
-                "onsuccess": lambda topicName, unused: self.add_subscription(topicName),
-                "onerror": lambda topicName, errcode: self.subscription_failed(
-                    topicName, errcode
-                ),
-            },
-        )
+        if add_to_future:
+            self.add_future(
+                tid,
+                {
+                    "arg": topic,
+                    "onsuccess": lambda topicName, unused: self.add_subscription(
+                        topicName
+                    ),
+                    "onerror": lambda topicName, errcode: self.subscription_failed(
+                        topicName, errcode
+                    ),
+                },
+            )
         return pb.ClientMsg(sub=pb.ClientSub(id=tid, topic=topic))
 
     def leave(self, topic):
@@ -228,6 +227,9 @@ class ChatBot:
         # Session initialization sequence: {hi}, {login}, {sub topic='me'}
         self.client_post(self.hello())
         self.client_post(self.login(cookie_file_name, schema, secret))
+        # Subscribe post before.
+        for topic in self.subscriptions:
+            self.client_post(self.subscribe(topic, False))
 
         return stream
 
