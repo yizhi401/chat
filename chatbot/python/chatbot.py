@@ -41,6 +41,7 @@ class ChatBot:
         self.subscriptions = {}
         # Keep grpc channel from being collected.
         self.channel = None
+        self.client = None
 
         self.retry_time = 0
 
@@ -99,6 +100,8 @@ class ChatBot:
                 msg = self.queue_out.get(timeout=60)
                 if msg == None:
                     logging.warn("Msg Is None.")
+                    if self.client != None:
+                        self.client.cancel()
                     return
                 logging.debug("out: %s", utils.to_json(msg))
                 # Clear retry time.
@@ -108,17 +111,28 @@ class ChatBot:
                 logging.error(traceback.format_exc())
                 logging.error(e)
                 state = self.channel._channel.check_connectivity_state(False)
+                logging.debug("Channel state:%s", state)
                 if state != grpc.ChannelConnectivity.READY.value[0]:
                     logging.error("Grpc Channel is not ready. Exiting...")
+                    if self.client != None:
+                        logging.info("Canncel grpc client...")
+                        self.client.cancel()
                     return
-                if self.retry_time > 10:
+                logging.debug("Retry times: %s", self.retry_time)
+                if self.retry_time > 5:
                     logging.warn("Too many retries. Exiting...")
+                    if self.client != None:
+                        logging.info("Canncel grpc client...")
+                        self.client.cancel()
                     return
                 else:
                     self.retry_time += 1
             except Exception as e:
                 logging.error(traceback.format_exc())
                 logging.error(e)
+                if self.client != None:
+                    logging.info("Canncel grpc client...")
+                    self.client.cancel()
                 return
 
     def client_post(self, msg):
@@ -381,7 +395,7 @@ class ChatBot:
             # server = self.init_server(args.listen)
 
             # Initialize and launch client
-            client = self.init_client(
+            self.client = self.init_client(
                 args.host, schema, secret, args.login_cookie, args.ssl, args.ssl_host
             )
 
@@ -389,7 +403,7 @@ class ChatBot:
             def exit_gracefully(signo, stack_frame):
                 logging.info("Terminated with signal %s ", signo)
                 # server.stop(0)
-                client.cancel()
+                self.client.cancel()
                 sys.exit(0)
 
             # Add signal handlers
@@ -400,7 +414,7 @@ class ChatBot:
             # server being down.
             while True:
                 try:
-                    self.client_message_loop(client)
+                    self.client_message_loop(self.client)
                 except Exception as err:
                     logging.error(traceback.format_exc())
                     logging.error("Error: %s", err)
@@ -410,9 +424,9 @@ class ChatBot:
                 # server.stop(None)
                 logging.info("Resetting client")
                 self.client_reset()
-                client.cancel()
+                self.client.cancel()
                 logging.info("Reconnecting")
-                client = self.init_client(
+                self.client = self.init_client(
                     args.host,
                     schema,
                     secret,
