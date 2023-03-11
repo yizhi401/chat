@@ -110,16 +110,17 @@ class ChatBot:
             except queue.Empty as e:
                 logging.error(traceback.format_exc())
                 logging.error(e)
-                state = self.channel._channel.check_connectivity_state(False)
-                logging.debug("Channel state:%s", state)
-                if state != grpc.ChannelConnectivity.READY.value[0]:
+                # state = self.channel._channel.check_connectivity_state(False)
+                logging.debug("Channel state:%s", self.channel_state)
+                # if state != grpc.ChannelConnectivity.READY.value[0]:
+                if self.channel_state != grpc.ChannelConnectivity.READY:
                     logging.error("Grpc Channel is not ready. Exiting...")
                     if self.client != None:
                         logging.info("Canncel grpc client...")
                         self.client.cancel()
                     return
                 logging.debug("Retry times: %s", self.retry_time)
-                if self.retry_time > 5:
+                if self.retry_time > 10:
                     logging.warn("Too many retries. Exiting...")
                     if self.client != None:
                         logging.info("Canncel grpc client...")
@@ -358,8 +359,7 @@ class ChatBot:
 
     def channel_callback(self, channel_connectivity):
         logging.debug("Channel connectivity: %s", channel_connectivity)
-        if channel_connectivity == grpc.ChannelConnectivity.READY:
-            logging.info("Connected")
+        self.channel_state = channel_connectivity
 
     def run(self, args):
         schema = None
