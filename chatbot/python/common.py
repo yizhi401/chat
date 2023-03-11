@@ -2,7 +2,7 @@ import pkg_resources
 
 # Maximum allowed linear dimension of an inline image in pixels.
 MAX_IMAGE_DIM = 768
-MAX_HISTORY_DATA = 20
+MAX_HISTORY_DATA = 40
 
 COMMON_MSG = {
     "USER_TTL_INVALID": "您的账户已超过有效期，请充值！",
@@ -56,9 +56,7 @@ FIND_OPTIONS = {
 }
 
 CTRL_KEYS = (
-    list(FIND_OPTIONS.keys())
-    + list(GAME_OPTIONS.keys())
-    + list(CTRL_CMDS.keys())
+    list(FIND_OPTIONS.keys()) + list(GAME_OPTIONS.keys()) + list(CTRL_CMDS.keys())
 )
 
 APP_NAME = "Tino-chatbot"
