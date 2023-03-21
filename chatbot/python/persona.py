@@ -246,14 +246,14 @@ class Persona(ABC):
         self.history[self.chat_mode].append(
             {
                 "role": "user",
-                "content": utils.clip_long_string(msg_str, clip_to_history=True),
+                "content": msg_str,
             }
         )
         content = self.ai_resp()
         self.history[self.chat_mode].append(
             {
                 "role": "assistant",
-                "content": utils.clip_long_string(content, clip_to_history=True),
+                "content": content,
             }
         )
         content = content.lstrip(self.role_prompt[self.chat_mode]).strip(",.!?;:。，！？；：")
@@ -311,7 +311,24 @@ class Persona(ABC):
             self._load_photo_pool(self.feeling)
 
     def generate_prompt(self):
-        """Returns list[dict[str, str]]."""
+        """Returns list[dict[str, str]]. During this process, the 
+        history and persona_preset will be trimed to max prompt length."""
+        total_len = 0
+        for msg in self.persona_preset[self.chat_mode]:
+            total_len += len(msg["content"])
+        for msg in self.history[self.chat_mode]:
+            total_len += len(msg["content"])
+        while total_len > common.MAX_PROMPT_LEN:
+            # Pop the oldest message from history first.
+            if len(self.history[self.chat_mode]) > 0:
+                content = self.history[self.chat_mode].pop(0)
+                total_len -= len(content["content"])
+                continue
+            # Pop the oldest message from persona_preset because it's too long.
+            if len(self.persona_preset[self.chat_mode]) > 0:
+                content = self.persona_preset[self.chat_mode].pop(0)
+                total_len -= len(content["content"])
+                continue
         messages = []
         messages.extend(self.persona_preset[self.chat_mode])
         messages.extend(self.history[self.chat_mode])

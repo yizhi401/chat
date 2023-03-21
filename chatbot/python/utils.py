@@ -6,8 +6,8 @@ import datetime
 import common
 from google.protobuf.json_format import MessageToDict
 
-
 def encode_to_bytes(src):
+    # {"pub":{"id":"81417","topic":"usrLO0Is2K06BQ","noecho":true,"head":{"mime":"text/x-drafty"},"content":{"txt":"你好 你好 hay","fmt":[{"tp":"BR","len":1,"at":2},{"tp":"BR","len":1,"at":5}]}}} 
     # encode_to_bytes converts the 'src' to a byte array.
     # An object/dictionary is first converted to json string then it's converted to bytes.
     # A string is directly converted to bytes.
@@ -17,21 +17,18 @@ def encode_to_bytes(src):
 
 
 # Shorten long strings for logging.
-def clip_long_string(obj, clip_to_history=False):
+def clip_long_string(obj):
     if isinstance(obj, str):
         if len(obj) > common.MAX_LOG_LEN:
-            if clip_to_history:
-                return obj[: common.MAX_LOG_LEN].strip(",.!?;:。，！？；：")
-            else:
-                return (
-                    "<"
-                    + str(len(obj))
-                    + " bytes: "
-                    + obj[:12]
-                    + "..."
-                    + obj[-12:]
-                    + ">"
-                )
+            return (
+                "<"
+                + str(len(obj))
+                + " bytes: "
+                + obj[:12]
+                + "..."
+                + obj[-12:]
+                + ">"
+            )
         return obj
     elif isinstance(obj, (list, tuple)):
         return [clip_long_string(item) for item in obj]

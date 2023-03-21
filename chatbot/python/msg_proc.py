@@ -5,6 +5,7 @@ import model_pb2 as pb
 import model_pb2_grpc as pbx
 from persona import Persona, CreatePersona
 import utils
+import json
 import db
 import traceback
 import common
@@ -32,6 +33,28 @@ def publish_msg(content, tid, topic):
         ),
     )
 
+def _recover_multiple_lines(json_msg):
+    # json_str: "content":{"txt":"你好 你好 hay","fmt":[{"tp":"BR","len":1,"at":2},{"tp":"BR","len":1,"at":5}]}}} 
+    try:
+        if "txt" in json_msg:
+            if "fmt" not in json_msg:
+                return json_msg['txt']
+            for fmt in json_msg['fmt']:
+                if fmt['tp'] == 'BR':
+                    json_msg['txt'] = json_msg['txt'][:fmt['at']] + '\n' + json_msg['txt'][fmt['at']+1:]
+            return json_msg['txt']
+    except Exception as e:
+        logging.error("Failed to recover multiple lines string: %s with exception %s", json_msg,e)
+        return json_msg
+
+def _parse_msg(msg:str):
+    # Check if msg is json string or complain string
+    try:
+        d = json.loads(msg)
+        return _recover_multiple_lines(d)
+    except ValueError:
+        # This is not json string, just return the string
+        return msg
 
 def process_chat(
     msg,
@@ -68,7 +91,7 @@ def process_chat(
         )
         return
 
-    msg_str = msg.data.content.decode("utf-8").strip('"')
+    msg_str =_parse_msg(msg.data.content.decode("utf-8").strip('"'))
     if msg_str not in common.CTRL_KEYS:
         tokens_left -= 1
         db.save_tokens_left(bot_name, msg.data.from_user_id, tokens_left)

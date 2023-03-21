@@ -63,5 +63,6 @@ APP_NAME = "Tino-chatbot"
 APP_VERSION = "1.2.2"
 LIB_VERSION = pkg_resources.get_distribution("tinode_grpc").version
 
+MAX_PROMPT_LEN = 2000
 # Maximum length of string to log. Shorten longer strings.
 MAX_LOG_LEN = 128
