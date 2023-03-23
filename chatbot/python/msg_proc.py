@@ -61,7 +61,6 @@ def process_chat(
     tid,
     queue_out,
     bot_name,
-    persona,
     photos_root,
 ):
     utils.config_logging(
@@ -99,12 +98,13 @@ def process_chat(
     logging.info("%s: User %s is valid", bot_name, msg.data.from_user_id)
 
     chat_persona = CreatePersona(
-        persona=persona,
         bot_name=bot_name,
         from_user_id=msg.data.from_user_id,
         topic=msg.data.topic,
         photos=photos_root,
     )
+    if chat_persona is None:
+        return
 
     # Update current tokens left
     chat_persona.set_tokens_left(tokens_left)

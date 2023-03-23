@@ -1,0 +1,1 @@
+The persona.yaml is not used by robot, only used for hand writing and generating json files.

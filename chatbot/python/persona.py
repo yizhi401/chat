@@ -1,6 +1,7 @@
 """Define persona class for chatbot."""
 import requests
 import logging
+import redis
 import random
 import db
 import time
@@ -507,7 +508,21 @@ class StudentPersona(Persona):
         ]
 
 
-def CreatePersona(persona: str, **kwargs) -> Persona:
+def CreatePersona(bot_name: str, **kwargs) -> Persona:
+    logging.debug("Get robot data %s", bot_name)
+    try:
+        with redis.Redis(
+            host="47.103.17.145", port=8010, db=6, password="godword"
+        ) as redis_ttl:
+            bot_data = redis_ttl.get(bot_name)
+            if bot_data == None:
+                logging.error("Bot %s not found. Are you runnig a existing robot?", bot_name)
+                return None
+            json_data = json.loads(bot_data)
+    except Exception as e:
+        logging.error("Error in get robot data %s", e)
+        return None
+
     if persona == "writer":
         return WriterPersona(**kwargs)
     if persona == "psycho":

@@ -29,12 +29,12 @@ import queue
 
 
 class ChatBot:
-    def __init__(self, persona: str, photos_root: pathlib.Path) -> None:
+    def __init__(self, name: str, photos_root: pathlib.Path) -> None:
         # User ID of the current user
         self.botUID = None
         # Dictionary wich contains lambdas to be executed when server response is received
         self.onCompletion = {}
-        self.persona = persona
+        self.name = name
         self.photos_root = photos_root
 
         # List of active subscriptions
@@ -49,7 +49,6 @@ class ChatBot:
         self.queue_out = multiprocessing.Queue()
 
         self.tid = 100
-        self.login_basic = ""
 
     def next_id(self) -> str:
         self.tid += 1
@@ -277,8 +276,7 @@ class ChatBot:
                 msg,
                 self.next_id(),
                 self.queue_out,
-                self.login_basic,
-                self.persona,
+                self.name,
                 self.photos_root,
             ),
         )
@@ -372,7 +370,6 @@ class ChatBot:
             """Use username:password"""
             schema = "basic"
             secret = args.login_basic.encode("utf-8")
-            self.login_basic = args.login_basic.split(":")[0]
             logging.info("Logging in with login:password %s", args.login_basic)
 
         else:

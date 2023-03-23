@@ -7,8 +7,10 @@ import datetime
 from chatbot import ChatBot
 
 
+
 def run(args):
-    chatBot = ChatBot(args.persona, args.photos_root)
+    robot_name = args.login_basic.split(":")[0]
+    chatBot = ChatBot(robot_name, args.photos_root)
     chatBot.run(args)
 
 
@@ -51,9 +53,6 @@ def main():
         "--login-cookie",
         default=".tn-cookie",
         help="read credentials from the provided cookie file",
-    )
-    parser.add_argument(
-        "--persona", default="writer", help="Persona type for this chatbot."
     )
     parser.add_argument(
         "--photos_root",
