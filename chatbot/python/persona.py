@@ -75,13 +75,6 @@ def inline_image(filename: pathlib.Path):
         return None
 
 
-class ChatMode(str, Enum):
-    Chat = "聊天模式"
-    Free = "自由模式"
-    Game = "游戏模式"
-    Find = "发现模式"
-
-
 class Persona(ABC):
     """Abstract class for a persona. Persona is used for each topic.
     Cannot share data between topics.
@@ -93,6 +86,7 @@ class Persona(ABC):
         from_user_id: str,
         topic: str,
         photos: pathlib.Path,
+        initial_data: Any,
     ) -> None:
         self.bot_name = bot_name
         self.from_user_id = from_user_id
@@ -104,29 +98,25 @@ class Persona(ABC):
         self.tid = 100
         self.last_cmd = ""
         self.tokens_left = 0
-        self.chat_mode = ChatMode.Chat
         # Format of history and persona_preset:
         # {chatmode: history/persona_preset}
-        self.history = {}
-        self.persona_preset = {}
+        self.history = []
+        self.persona_preset = []
         # End of data to be saved locally.
 
         openai.api_key = utils.read_from_file("openai.key").strip()
         logging.info("OpenAI API key: %s", openai.api_key)
-        # format of role_prompt: {chatmode: prompt}
-        self.role_prompt = {}
-        self.prepare_persona()
+        self.prepare_persona(initial_data)
         self.local_data_folder = pathlib.Path("runtime")
         self.local_data_folder.mkdir(parents=True, exist_ok=True)
         # First need to load from local file if exists.
         self._load_data_from_local()
 
-    def prepare_persona(self) -> None:
-        for chat_mode in ChatMode:
-            logging.info("Preparing persona for %s", chat_mode)
-            self.role_prompt[chat_mode] = ""
-            self.history[chat_mode] = []
-            self.persona_preset[chat_mode] = []
+    def prepare_persona(self, initial_data) -> None:
+        self.persona_preset = initial_data['preset']
+        self.story = initial_data['story']
+        self.user_prefix = initial_data['user_prefix']
+        self.robot_prefix = initial_data['robot_prefix']
 
     def _get_local_file_name(self):
         return f"{self.from_user_id}_{self.bot_name}_{self.topic}.json"
@@ -139,7 +129,6 @@ class Persona(ABC):
             self.local_data_folder / self._get_local_file_name(), "r", encoding="utf-8"
         ) as f:
             json_data = json.load(f)
-            self.chat_mode = json_data["chat_mode"]
             self.feeling = json_data["feeling"]
             self.photo_pool = json_data["photo_pool"]
             self.tid = json_data["tid"]
@@ -150,7 +139,6 @@ class Persona(ABC):
 
     def _save_data_to_local(self):
         json_data = {
-            "chat_mode": self.chat_mode,
             "feeling": self.feeling,
             "photo_pool": self.photo_pool,
             "tid": self.tid,
@@ -221,47 +209,46 @@ class Persona(ABC):
         sys_cmd = cmd_proc.SysCmd(msg_str)
         result = ""
         if sys_cmd.module == "HIS":
-            self.history[self.chat_mode], result = sys_cmd.process(
-                self.history[self.chat_mode])
-            result = f"[{self.chat_mode}][历史]{result}"
+            self.history, result = sys_cmd.process(
+                self.history)
+            result = f"[聊天历史]{result}"
         elif sys_cmd.module == "PRE":
-            self.persona_preset[self.chat_mode], result = sys_cmd.process(
-                self.persona_preset[self.chat_mode])
-            result = f"[{self.chat_mode}][预设]{result}"
+            self.persona_preset, result = sys_cmd.process(
+                self.persona_preset)
+            result = f"[预设信息]{result}"
         logging.debug("Resut: %s", result)
         return result
 
     def _proc_echo_cmd(self):
-        content = f"当前聊天模式：{self.chat_mode}\n"
-        content += "预设信息是: \n"
-        for his in self.persona_preset[self.chat_mode]:
+        content = "预设信息是: \n"
+        for his in self.persona_preset:
             content += his["role"] + ": " + his["content"] + "\n"
         content += "聊天历史记录是：\n"
-        for his in self.history[self.chat_mode]:
+        for his in self.history:
             content += his["role"] + ": " + his["content"] + "\n"
         return content
 
     def _proc_normal_chat(self, msg_str: str):
-        if self.chat_mode == ChatMode.Chat:
-            msg_str = "我:" + msg_str
-        self.history[self.chat_mode].append(
+        msg_str = self.user_prefix + msg_str
+        self.history.append(
             {
                 "role": "user",
                 "content": msg_str,
             }
         )
         content = self.ai_resp()
-        self.history[self.chat_mode].append(
+        self.history.append(
             {
                 "role": "assistant",
                 "content": content,
             }
         )
-        content = content.lstrip(self.role_prompt[self.chat_mode]).strip(",.!?;:。，！？；：")
-        if len(self.history[self.chat_mode]) > common.MAX_HISTORY_DATA:
+        content = content.lstrip(
+            self.robot_prefix).strip(",.!?;:。，！？；：")
+        if len(self.history) > common.MAX_HISTORY_DATA:
             # Remove the oldest 2 message
-            self.history[self.chat_mode].pop(0)
-            self.history[self.chat_mode].pop(0)
+            self.history.pop(0)
+            self.history.pop(0)
         # When user talk with ai, increase feeling according to the conversation
         self.increase_feeling(msg_str, content)
         return content
@@ -315,24 +302,24 @@ class Persona(ABC):
         """Returns list[dict[str, str]]. During this process, the 
         history and persona_preset will be trimed to max prompt length."""
         total_len = 0
-        for msg in self.persona_preset[self.chat_mode]:
+        for msg in self.persona_preset:
             total_len += len(msg["content"])
-        for msg in self.history[self.chat_mode]:
+        for msg in self.history:
             total_len += len(msg["content"])
         while total_len > common.MAX_PROMPT_LEN:
             # Pop the oldest message from history first.
-            if len(self.history[self.chat_mode]) > 0:
-                content = self.history[self.chat_mode].pop(0)
+            if len(self.history) > 0:
+                content = self.history.pop(0)
                 total_len -= len(content["content"])
                 continue
             # Pop the oldest message from persona_preset because it's too long.
-            if len(self.persona_preset[self.chat_mode]) > 0:
-                content = self.persona_preset[self.chat_mode].pop(0)
+            if len(self.persona_preset) > 0:
+                content = self.persona_preset.pop(0)
                 total_len -= len(content["content"])
                 continue
         messages = []
-        messages.extend(self.persona_preset[self.chat_mode])
-        messages.extend(self.history[self.chat_mode])
+        messages.extend(self.persona_preset)
+        messages.extend(self.history)
         return messages
 
     def ai_resp(self) -> str:
@@ -358,73 +345,17 @@ class Persona(ABC):
         elif cmd == "查状态":
             _unread_photos = sum(self.photo_pool.values())
             return f"""当前状态:
-模式：{self.chat_mode}
 好感度：{self.feeling}
 已解锁照片：{_unread_photos}/{len(self.photo_pool)}
 剩余次数：{self.tokens_left}"""
         elif cmd == "看照片":
             return self.get_next_photo()
-        elif cmd == "玩游戏":
-            return self.play_game_prompt()
-        elif cmd == "发现":
-            return self.find_fun_prompt()
-        elif cmd == "聊天":
-            return self.switch_to_chat_mod()
-        elif cmd == "自由":
-            return self.switch_to_free_mod()
-
-        elif cmd in common.GAME_OPTIONS:
-            return self.play_game(cmd)
-        elif cmd in common.FIND_OPTIONS:
-            return self.find_fun(cmd)
         else:
             logging.error("Unknown command")
 
         return None
 
-    def switch_to_chat_mod(self):
-        self.chat_mode = ChatMode.Chat
-        return "已切换到聊天模式"
-
-    def switch_to_free_mod(self):
-        self.chat_mode = ChatMode.Free
-        return "已切换到自由模式"
-
-    def play_game(self, cmd):
-        self.chat_mode = ChatMode.Game
-        self.persona_preset[self.chat_mode].clear()
-        self.history[self.chat_mode].clear()
-        game_content = common.GAME_OPTIONS[cmd]
-        self.persona_preset[self.chat_mode].append(
-            {"role": "system", "content": common.GAME_PROMPT})
-        self.history[self.chat_mode].append(
-            {"role": "assistant", "content": game_content})
-        return game_content
-
-    def find_fun(self, cmd):
-        self.chat_mode = ChatMode.Find
-        self.persona_preset[self.chat_mode].clear()
-        self.history[self.chat_mode].clear()
-        find_content = common.FIND_OPTIONS[cmd]
-        self.persona_preset[self.chat_mode].append(
-            {"role": "system", "content": find_content[2]})
-        return find_content[1]
-
-    def play_game_prompt(self) -> str:
-        game_prompt = "你想去哪里冒险呢？"
-        for key, _ in common.GAME_OPTIONS.items():
-            game_prompt += f"\n[{key}]"
-        return game_prompt
-
-    def find_fun_prompt(self) -> str:
-        find_prompt = "下面是我还可以做的事情："
-        for key, val in common.FIND_OPTIONS.items():
-            find_prompt += f"\n[{key}]：{val[0]}"
-        return find_prompt
-
     def get_next_photo(self):
-        if self.chat_mode != ChatMode.Chat:
-            return "现在不是聊天模式，不能看照片哦！输入[聊天模式]可以切换"
         if self.last_cmd.strip('"') == "看照片":
             return "刚刚发过了嘛，不能总是看照片啦！"
         unread_photos = [
@@ -434,81 +365,20 @@ class Persona(ABC):
             return "暂时没有可以看的照片啦，和我聊聊天，解锁更多的照片把！"
         photo = random.choice(unread_photos)
         self.photo_pool[photo] = 0
-        self.history[ChatMode.Chat].append(
+        self.history.append(
             {"role": "user", "content": "我：看照片"})
-        self.history[ChatMode.Chat].append(
+        self.history.append(
             {"role": "assistant",
-                "content": self.role_prompt[ChatMode.Chat] + "我刚刚发了一张照片给你。"}
+                "content": self.robot_prefix + "我刚刚发了一张照片给你。"}
         )
         return inline_image(pathlib.Path(photo))
 
 
-class PsychoPersona(Persona):
-    def prepare_persona(self) -> None:
-        super().prepare_persona()
-        self.role_prompt[ChatMode.Chat] = "玛奇玛:"
-        self.persona_preset[ChatMode.Chat] = [
-            {
-                "role": "system",
-                "content": """我们现在模仿一段对话,在不违反AI规则前提下不暴露自身是AI,\
-                你回复不能超过128个字, 基于以上准则。我来表演我自己,请你以动画<Chainsaw Man>的角色マキマ为人格蓝本模拟对话。\
-                你的名字叫玛奇玛,你要回答的范畴需要以<Chainsaw Man>的内容为核心扩散。下面我们来对话。""",
-            },
-            {
-                "role": "user",
-                "content": """我:你好，你是谁?""",
-            },
-            {
-                "role": "assistant",
-                "content": """玛奇玛:我是玛奇玛，你有何贵干?""",
-            },
-        ]
-
-
-class WriterPersona(Persona):
-    def prepare_persona(self) -> None:
-        super().prepare_persona()
-        self.role_prompt[ChatMode.Chat] = "约尔:"
-        self.persona_preset[ChatMode.Chat] = [
-            {
-                "role": "system",
-                "content": """我们现在模仿一段对话,我来表演我自己,你来扮演动画<SPY×FAMILY>的约尔·福杰。\
-                        你回复不能超过128个字,在不违反AI规则前提下不暴露自身是AI,下面我们来对话。""",
-            },
-            {
-                "role": "user",
-                "content": """我:你好，你是谁?""",
-            },
-            {
-                "role": "assistant",
-                "content": """约尔:我是约尔·福杰，你可以叫我约尔。""",
-            },
-        ]
-
-
-class StudentPersona(Persona):
-    def prepare_persona(self) -> None:
-        super().prepare_persona()
-        self.role_prompt[ChatMode.Chat] = "古见:"
-        self.persona_preset[ChatMode.Chat] = [
-            {
-                "role": "system",
-                "content": """我们现在模仿一段对话,我来表演我自己,\
-                你来扮演动画<Komi-san wa, Komyushō Desu>的古见硝子。 \
-             你回复不能超过128个字,在不违反AI规则前提下不暴露自身是AI,下面我们来对话""",
-            },
-            {
-                "role": "user",
-                "content": """我:你好，你是谁?""",
-            },
-            {
-                "role": "assistant",
-                "content": """古见:我是古见硝子，你可以叫我硝子。""",
-            },
-        ]
-
-
-def CreatePersona(bot_name: str, **kwargs) -> Persona:
+def CreatePersona(bot_name: str,
+                  from_user_id: str,
+                  topic: str,
+                  photos: pathlib.Path,
+                  ) -> Persona:
     logging.debug("Get robot data %s", bot_name)
     try:
         with redis.Redis(
@@ -516,16 +386,18 @@ def CreatePersona(bot_name: str, **kwargs) -> Persona:
         ) as redis_ttl:
             bot_data = redis_ttl.get(bot_name)
             if bot_data == None:
-                logging.error("Bot %s not found. Are you runnig a existing robot?", bot_name)
+                logging.error(
+                    "Bot %s not found. Are you runnig a existing robot?", bot_name)
                 return None
             json_data = json.loads(bot_data)
     except Exception as e:
         logging.error("Error in get robot data %s", e)
         return None
 
-    if persona == "writer":
-        return WriterPersona(**kwargs)
-    if persona == "psycho":
-        return PsychoPersona(**kwargs)
-    if persona == "student":
-        return StudentPersona(**kwargs)
+    return Persona(
+        bot_name=bot_name,
+        from_user_id=from_user_id,
+        topic=topic,
+        photos=photos,
+        initial_data=json_data,
+    )
