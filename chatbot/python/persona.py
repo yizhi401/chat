@@ -86,7 +86,8 @@ class Persona(ABC):
         from_user_id: str,
         topic: str,
         photos: pathlib.Path,
-        initial_data: Any,
+        initial_data,
+        tokens_left,
     ) -> None:
         self.bot_name = bot_name
         self.from_user_id = from_user_id
@@ -97,7 +98,12 @@ class Persona(ABC):
         self.feeling = 0
         self.tid = 100
         self.last_cmd = ""
-        self.tokens_left = 0
+        self.tokens_used = {
+            "times":0,
+            "tokens":0,
+        }
+        self.initial_data = initial_data
+        self.tokens_left = tokens_left
         # Format of history and persona_preset:
         # {chatmode: history/persona_preset}
         self.history = []
@@ -106,17 +112,19 @@ class Persona(ABC):
 
         openai.api_key = utils.read_from_file("openai.key").strip()
         logging.info("OpenAI API key: %s", openai.api_key)
-        self.prepare_persona(initial_data)
+        self.prepare_persona()
         self.local_data_folder = pathlib.Path("runtime")
         self.local_data_folder.mkdir(parents=True, exist_ok=True)
         # First need to load from local file if exists.
         self._load_data_from_local()
 
-    def prepare_persona(self, initial_data) -> None:
-        self.persona_preset = initial_data['preset']
-        self.story = initial_data['story']
-        self.user_prefix = initial_data['user_prefix']
-        self.robot_prefix = initial_data['robot_prefix']
+    def prepare_persona(self) -> None:
+        self.persona_preset = self.initial_data['preset']
+        self.story = self.initial_data['story']
+        self.user_prefix = self.initial_data['user_prefix']
+        self.robot_prefix = self.initial_data['robot_prefix']
+        self.memory = self.initial_data['memory']
+        self.history.clear()
 
     def _get_local_file_name(self):
         return f"{self.from_user_id}_{self.bot_name}_{self.topic}.json"
@@ -134,8 +142,9 @@ class Persona(ABC):
             self.tid = json_data["tid"]
             self.last_cmd = json_data["last_cmd"]
             self.history = json_data["history"]
-            self.tokens_left = json_data["tokens_left"]
+            self.tokens_used = json_data["tokens_used"]
             self.persona_preset = json_data["persona_preset"]
+            self.memory = json_data["memory"]
 
     def _save_data_to_local(self):
         json_data = {
@@ -144,8 +153,9 @@ class Persona(ABC):
             "tid": self.tid,
             "last_cmd": self.last_cmd,
             "history": self.history,
-            "tokens_left": self.tokens_left,
+            "tokens_used": self.tokens_used,
             "persona_preset": self.persona_preset,
+            "memory": self.memory,
         }
         with open(
             self.local_data_folder / self._get_local_file_name(), "w", encoding="utf-8"
@@ -159,9 +169,6 @@ class Persona(ABC):
         self._save_data_to_local()
         logging.info("Publish msg done")
         return reslut
-
-    def set_tokens_left(self, tokens_left: int):
-        self.tokens_left = tokens_left
 
     def _load_from_db(self):
         json_str = db.get_user_data(f"{self.from_user_id}:{self.bot_name}")
@@ -177,6 +184,8 @@ class Persona(ABC):
             # are seen before by the user, we make all the
             # photos unread as a bonus.
             self._reload_photo_pool()
+        self.tokens_used['times'] = json_data["times"]
+        self.tokens_used['tokens'] = json_data["tokens"]
 
     def _reload_photo_pool(self):
         for i in range(0, int(self.feeling / 10)):
@@ -200,6 +209,8 @@ class Persona(ABC):
     def _save_to_db(self):
         json_data = {
             "feeling": self.feeling,
+            "times": self.tokens_used['times'],
+            "tokens": self.tokens_used['tokens']
         }
         logging.debug("Save to db: %s", json_data)
         db.save_user_data(
@@ -319,17 +330,36 @@ class Persona(ABC):
                 continue
         messages = []
         messages.extend(self.persona_preset)
-        messages.extend(self.history)
+        if self.memory:
+            messages.extend(self.history)
+        else:
+            messages.append(self.history[-1])
         return messages
 
     def ai_resp(self) -> str:
         # Sleep 3 seconds to avoid too many requests.
         # time.sleep(3)
+        prompt_data = self.generate_prompt()
+        words = 0
+        for msg in prompt_data:
+            words += len(msg["content"])
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=self.generate_prompt(),
+            messages=prompt_data,
         )
         answer = response.choices[0]["message"]["content"].strip('"')
+        words += len(answer)
+        if self.tokens_left["tokens"] > 0:
+            self.tokens_left["tokens"] -= words
+            self.tokens_used['tokens'] += words
+            if self.tokens_left["tokens"] < 0:
+                self.tokens_left["tokens"] = 0
+        else:
+            self.tokens_left["times"] -= 1
+            self.tokens_used['times'] += 1
+            if self.tokens_left["times"] < 0:
+                self.tokens_left["times"] = 0
+        db.save_tokens_left(self.from_user_id,self.tokens_left)
         # logging.info(answer)
         return answer
 
@@ -347,9 +377,17 @@ class Persona(ABC):
             return f"""当前状态:
 好感度：{self.feeling}
 已解锁照片：{_unread_photos}/{len(self.photo_pool)}
-剩余次数：{self.tokens_left}"""
+剩余次数：{self.tokens_left['times']}
+剩余tokens: {self.tokens_left['tokens']}
+记忆：{'开' if self.memory else '关'}"""
         elif cmd == "看照片":
             return self.get_next_photo()
+        elif cmd == "记忆开":
+            self.memory = True
+            return "记忆已开启"
+        elif cmd == "记忆关":
+            self.memory = False
+            return "记忆已关闭"
         else:
             logging.error("Unknown command")
 
@@ -378,6 +416,7 @@ def CreatePersona(bot_name: str,
                   from_user_id: str,
                   topic: str,
                   photos: pathlib.Path,
+                  tokens_left,
                   ) -> Persona:
     logging.debug("Get robot data %s", bot_name)
     try:
@@ -393,6 +432,10 @@ def CreatePersona(bot_name: str,
     except Exception as e:
         logging.error("Error in get robot data %s", e)
         return None
+    
+    if "memory" not in json_data:
+        # 默认记忆开启
+        json_data["memory"] = True
 
     return Persona(
         bot_name=bot_name,
@@ -400,4 +443,5 @@ def CreatePersona(bot_name: str,
         topic=topic,
         photos=photos,
         initial_data=json_data,
+        tokens_left=tokens_left,
     )

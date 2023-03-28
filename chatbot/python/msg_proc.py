@@ -76,7 +76,7 @@ def process_chat(
     # # Insert a small delay to prevent accidental DoS self-attack.
     time.sleep(0.1)
 
-    ttl_valid, tokens_left = db.get_user_validity(bot_name, msg.data.from_user_id)
+    ttl_valid, tokens_left = db.get_user_validity(msg.data.from_user_id)
     if not ttl_valid:
         # Respond with with chat persona for this topic.
         queue_out.put(
@@ -84,16 +84,16 @@ def process_chat(
         )
         return
 
-    if tokens_left <= 0:
+    if tokens_left['times'] <=0 and tokens_left['tokens'] <=0:
         queue_out.put(
             publish_msg(common.COMMON_MSG["USER_TOKEN_INVALID"], tid, msg.data.topic)
         )
         return
 
     msg_str =_parse_msg(msg.data.content.decode("utf-8").strip('"'))
-    if msg_str not in common.CTRL_KEYS:
-        tokens_left -= 1
-        db.save_tokens_left(bot_name, msg.data.from_user_id, tokens_left)
+    # if msg_str not in common.CTRL_KEYS:
+        # tokens_left -= 1
+        # db.save_tokens_left(bot_name, msg.data.from_user_id, tokens_left)
 
     logging.info("%s: User %s is valid", bot_name, msg.data.from_user_id)
 
@@ -102,12 +102,11 @@ def process_chat(
         from_user_id=msg.data.from_user_id,
         topic=msg.data.topic,
         photos=photos_root,
+        tokens_left=tokens_left,
     )
     if chat_persona is None:
         return
 
-    # Update current tokens left
-    chat_persona.set_tokens_left(tokens_left)
     try:
         # Respond with with chat persona for this topic.
         msg = chat_persona.publish_msg(msg_str)

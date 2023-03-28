@@ -1,8 +1,9 @@
 import logging
 import redis
+import json
 
 
-def get_user_validity(chatbot: str, from_user_id: str):
+def get_user_validity(from_user_id: str):
     logging.debug("Checking user validity: %s", from_user_id)
     ttl_key = f"TTL:{from_user_id}"
     try:
@@ -13,9 +14,13 @@ def get_user_validity(chatbot: str, from_user_id: str):
             if token_left == None:
                 return [False, 0]
             time_left = redis_ttl.ttl(ttl_key)
-            if time_left < 0:
+            if time_left is None or time_left < 0:
                 return [False, 0]
-            tokens = int(token_left.decode("utf-8"))
+            tokens = json.loads(token_left.decode("utf-8"))
+            # token string is like:
+            # {"times": 10, "tokens": 20}
+            if tokens["times"] <= 0 and tokens["tokens"] <= 0:
+                return [False, 0]
             logging.debug("User %s has %s tokens left", from_user_id, tokens)
             return [True, tokens]
     except Exception as e:
@@ -23,15 +28,20 @@ def get_user_validity(chatbot: str, from_user_id: str):
         return [False, 0]
 
 
-def save_tokens_left(chatbot: str, from_user_id: str, tokens_left: int):
+def save_tokens_left(from_user_id: str, tokens_left):
     logging.debug("Decreasing tokens for user %s : %s",
                   from_user_id, tokens_left)
-    ttl_key = f"TTL:{chatbot}:{from_user_id}"
+    ttl_key = f"TTL:{from_user_id}"
     try:
         with redis.Redis(
             host="47.103.17.145", port=8010, db=7, password="godword"
         ) as redis_ttl:
-            redis_ttl.set(ttl_key, str(tokens_left))
+            json_str = json.dumps(tokens_left)
+            ttl = redis_ttl.ttl(ttl_key)
+            if ttl is None or ttl < 0:
+                return
+            redis_ttl.set(ttl_key, json_str)
+            redis_ttl.expire(ttl_key, ttl)
     except Exception as e:
         logging.error("Error in save_tokens_left %s", e)
 
