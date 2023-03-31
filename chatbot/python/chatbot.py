@@ -29,12 +29,13 @@ import queue
 
 
 class ChatBot:
-    def __init__(self, name: str, photos_root: pathlib.Path) -> None:
+    def __init__(self, name: str, passwd:str, photos_root: pathlib.Path) -> None:
         # User ID of the current user
         self.botUID = None
         # Dictionary wich contains lambdas to be executed when server response is received
         self.onCompletion = {}
         self.name = name
+        self.passwd = passwd
         self.photos_root = photos_root
 
         # List of active subscriptions
@@ -234,7 +235,7 @@ class ChatBot:
             )
         )
 
-    def init_client(self, addr, schema, secret, cookie_file_name, secure, ssl_host):
+    def init_client(self, addr, schema, secret, cookie_file_name=".tn-cookie", secure=False, ssl_host=""):
         logging.info(
             "Connecting to %s %s %s %s",
             "secure" if secure else "",
@@ -356,40 +357,16 @@ class ChatBot:
         logging.debug("Channel connectivity: %s", channel_connectivity)
         self.channel_state = channel_connectivity
 
-    def run(self, args):
-        schema = None
-        secret = None
-
-        if args.login_token:
-            """Use token to login"""
-            schema = "token"
-            secret = args.login_token.encode("ascii")
-            logging.info("Logging in with token: %s", args.login_token)
-
-        elif args.login_basic:
-            """Use username:password"""
-            schema = "basic"
-            secret = args.login_basic.encode("utf-8")
-            logging.info("Logging in with login:password %s", args.login_basic)
-
-        else:
-            """Try reading the cookie file"""
-            try:
-                schema, secret = self.read_auth_cookie(args.login_cookie)
-                logging.info("Logging in with cookie file %s", args.login_cookie)
-            except Exception as err:
-                logging.info("Failed to read authentication cookie %s", err)
+    def run(self, host_addr):
+        schema = 'basic'
+        secret = f"{self.name}:{self.passwd}".encode("utf-8")
 
         if schema:
             # Load random quotes from file
-            # log("Loaded {} quotes".format(load_quotes(args.quotes)))
-
-            # Start Plugin server
-            # server = self.init_server(args.listen)
 
             # Initialize and launch client
             self.client = self.init_client(
-                args.host, schema, secret, args.login_cookie, args.ssl, args.ssl_host
+                host_addr, schema, secret
             )
 
             # Setup closure for graceful termination
@@ -420,13 +397,10 @@ class ChatBot:
                 self.client.cancel()
                 logging.info("Reconnecting")
                 self.client = self.init_client(
-                    args.host,
+                    host_addr,
                     schema,
                     secret,
-                    args.login_cookie,
-                    args.ssl,
-                    args.ssl_host,
-                )
+                    )
 
         else:
             logging.error("Error: authentication scheme not defined")

@@ -15,12 +15,6 @@ def dump_to_yaml_file(yaml_file_path: str, data: dict):
         yaml.dump(data, f, allow_unicode=True)
 
 
-def get_all_keys_in_redis_db(db: int)->list:
-    with redis.Redis(
-        host="47.103.17.145", port=8010, db=6, password="godword"
-    ) as redis_db:
-        return redis_db.keys()
-
 def parse_json_str_to_dict(json_str: str)->dict:
     try:
         return json.loads(json_str)

@@ -6,12 +6,11 @@ import logging
 import datetime
 from chatbot import ChatBot
 
-
-
 def run(args):
     robot_name = args.login_basic.split(":")[0]
-    chatBot = ChatBot(robot_name, args.photos_root)
-    chatBot.run(args)
+    robot_pass = args.login_basic.split(":")[1]
+    chatBot = ChatBot(robot_name, robot_pass ,args.photos_root)
+    chatBot.run(args.host)
 
 
 def init():
