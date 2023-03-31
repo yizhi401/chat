@@ -99,8 +99,8 @@ class Persona(ABC):
         self.tid = 100
         self.last_cmd = ""
         self.tokens_used = {
-            "times":0,
-            "tokens":0,
+            "timeCount":0,
+            "tokenCount":0,
         }
         self.initial_data = initial_data
         self.tokens_left = tokens_left
@@ -184,8 +184,8 @@ class Persona(ABC):
             # are seen before by the user, we make all the
             # photos unread as a bonus.
             self._reload_photo_pool()
-        self.tokens_used['times'] = json_data["times"]
-        self.tokens_used['tokens'] = json_data["tokens"]
+        self.tokens_used['timeCount'] = json_data["timeCount"]
+        self.tokens_used['tokenCount'] = json_data["tokenCount"]
 
     def _reload_photo_pool(self):
         for i in range(0, int(self.feeling / 10)):
@@ -209,8 +209,8 @@ class Persona(ABC):
     def _save_to_db(self):
         json_data = {
             "feeling": self.feeling,
-            "times": self.tokens_used['times'],
-            "tokens": self.tokens_used['tokens']
+            "timeCount": self.tokens_used['timeCount'],
+            "tokenCount": self.tokens_used['tokenCount']
         }
         logging.debug("Save to db: %s", json_data)
         db.save_user_data(
@@ -218,15 +218,8 @@ class Persona(ABC):
 
     def _proc_sys_cmd(self, msg_str: str):
         sys_cmd = cmd_proc.SysCmd(msg_str)
-        result = ""
-        if sys_cmd.module == "HIS":
-            self.history, result = sys_cmd.process(
-                self.history)
-            result = f"[聊天历史]{result}"
-        elif sys_cmd.module == "PRE":
-            self.persona_preset, result = sys_cmd.process(
-                self.persona_preset)
-            result = f"[预设信息]{result}"
+        self.history, result = sys_cmd.process(
+            self.history)
         logging.debug("Resut: %s", result)
         return result
 
@@ -353,16 +346,16 @@ class Persona(ABC):
         )
         answer = response.choices[0]["message"]["content"].strip('"')
         words += len(answer)
-        if self.tokens_left["tokens"] > 0:
-            self.tokens_left["tokens"] -= words
-            self.tokens_used['tokens'] += words
-            if self.tokens_left["tokens"] < 0:
-                self.tokens_left["tokens"] = 0
+        if self.tokens_left["tokenCount"] > 0:
+            self.tokens_left["tokenCount"] -= words
+            self.tokens_used['tokenCount'] += words
+            if self.tokens_left["tokenCount"] < 0:
+                self.tokens_left["tokenCount"] = 0
         else:
-            self.tokens_left["times"] -= 1
-            self.tokens_used['times'] += 1
-            if self.tokens_left["times"] < 0:
-                self.tokens_left["times"] = 0
+            self.tokens_left["timeCount"] -= 1
+            self.tokens_used['timeCount'] += 1
+            if self.tokens_left["timeCount"] < 0:
+                self.tokens_left["timeCount"] = 0
         db.save_tokens_left(self.from_user_id,self.tokens_left)
         # logging.info(answer)
         return answer
@@ -381,8 +374,8 @@ class Persona(ABC):
             return f"""当前状态:
 好感度：{self.feeling}
 已解锁照片：{_unread_photos}/{len(self.photo_pool)}
-剩余次数：{self.tokens_left['times']}
-剩余tokens: {self.tokens_left['tokens']}
+剩余次数：{self.tokens_left['timeCount']}
+剩余tokens: {self.tokens_left['tokenCOunt']}
 记忆：{'开' if self.memory else '关'}"""
         elif cmd == "看照片":
             return self.get_next_photo()

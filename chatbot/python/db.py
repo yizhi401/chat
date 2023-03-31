@@ -18,8 +18,8 @@ def get_user_validity(from_user_id: str):
                 return [False, 0]
             tokens = json.loads(token_left.decode("utf-8"))
             # token string is like:
-            # {"times": 10, "tokens": 20}
-            if tokens["times"] <= 0 and tokens["tokens"] <= 0:
+            # {"timeCount": 10, "tokenCount": 20}
+            if tokens["timeCount"] <= 0 and tokens["tokenCount"] <= 0:
                 return [False, 0]
             logging.debug("User %s has %s tokens left", from_user_id, tokens)
             return [True, tokens]

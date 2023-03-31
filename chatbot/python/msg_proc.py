@@ -84,7 +84,7 @@ def process_chat(
         )
         return
 
-    if tokens_left['times'] <=0 and tokens_left['tokens'] <=0:
+    if tokens_left['timeCount'] <=0 and tokens_left['tokenCount'] <=0:
         queue_out.put(
             publish_msg(common.COMMON_MSG["USER_TOKEN_INVALID"], tid, msg.data.topic)
         )
