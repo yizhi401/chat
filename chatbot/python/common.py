@@ -8,6 +8,10 @@ COMMON_MSG = {
     "USER_TTL_INVALID": "您的账户已超过有效期，请充值！",
     "USER_TOKEN_INVALID": "您的账户剩余问答次数不足，请充值！",
     "INTERNAL_ERROR": "现在我的脑袋有点乱，让我再好好想想...",
+    "MESSAGE_NOT_SUPPORTED":"我现在还理解不了这种类型的信息，请换个方式和我聊天哦",
+    "IMAGE_MSG_NOT_SUPPORTED":"我现在还理解不了图片，请换个方式和我聊天哦",
+    "INVALID_MESSAGE_FORMAT":"信息格式错误，请报告BUG",
+    "AUDIO_MSG_NOT_SUPPORTED":"我没听懂您说的是什么，可以再重复一遍吗？",
 }
 
 CTRL_CMDS = {

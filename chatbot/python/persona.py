@@ -260,7 +260,7 @@ class Persona(ABC):
 
         self.tid += 1
 
-        logging.info("Received: %s", msg_str)
+        logging.info("Received: %s", utils.clip_long_string(msg_str))
         if cmd_proc.check_if_command_valid(msg_str):
             content = self._proc_sys_cmd(msg_str)
         elif msg_str.strip('"') in common.CTRL_KEYS:

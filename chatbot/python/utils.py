@@ -1,5 +1,6 @@
 import json
 import logging
+import logging.handlers
 import pathlib
 import os
 import datetime
@@ -55,14 +56,18 @@ def config_logging(logfile_name: str = ""):
         logfile_name = f"chatbot[{process_id}]-{time_str}" + ".log"
     logs_dir = pathlib.Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
-    file_handler = logging.FileHandler(
-        logs_dir / logfile_name, mode="a", encoding="utf-8"
+    file_rotate_handler = logging.handlers.RotatingFileHandler(
+        logs_dir / logfile_name,
+        mode="a",
+        encoding="utf-8",
+        maxBytes=1024 * 1024 * 10,
+        backupCount=5,
     )
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s %(levelname)s %(filename)s:%(lineno)d %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        handlers={file_handler},
+        handlers={file_rotate_handler},
         # filename=logs_dir / logfile_name,
         # filemode="a",
         # encoding="utf-8",

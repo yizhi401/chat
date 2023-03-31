@@ -30,7 +30,7 @@ class SysCmd:
     def __init__(self, cmd_str):
         cmd_parts = cmd_str.split()
         if len(cmd_parts) == 1:
-            self.cmd = cmd_parts
+            self.cmd = cmd_parts[0]
             self.role = ""
             self.content = ""
         elif len(cmd_parts) == 3:

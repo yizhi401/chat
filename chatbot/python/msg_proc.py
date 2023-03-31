@@ -1,5 +1,9 @@
 import time
+import io
+import os
 import logging
+import openai
+import base64
 import multiprocessing
 import model_pb2 as pb
 import model_pb2_grpc as pbx
@@ -44,17 +48,34 @@ def _recover_multiple_lines(json_msg):
                     json_msg['txt'] = json_msg['txt'][:fmt['at']] + '\n' + json_msg['txt'][fmt['at']+1:]
             return json_msg['txt']
     except Exception as e:
-        logging.error("Failed to recover multiple lines string: %s with exception %s", json_msg,e)
-        return json_msg
+        logging.error("Failed to recover multiple lines string: %s with exception %s", utils.clip_long_string(json_msg),e)
+
+    return json_msg
+    
 
 def _parse_msg(msg:str):
     # Check if msg is json string or complain string
     try:
-        d = json.loads(msg)
-        return _recover_multiple_lines(d)
+        return json.loads(msg)
     except ValueError:
         # This is not json string, just return the string
         return msg
+
+def process_audio(msg_data):
+    logging.debug("process_audio: %s", utils.clip_long_string(msg_data))
+    openai.api_key = utils.read_from_file("openai.key").strip()
+    byte_str_decoded = base64.b64decode(msg_data['val'])
+
+    file_name = msg_data['name']
+    with open(file_name, 'wb') as f:
+        f.write(byte_str_decoded)
+
+    with open(file_name, 'rb') as audio_file:
+        transcript = openai.Audio.transcribe("whisper-1", audio_file)
+
+    os.remove(file_name)
+    logging.debug("Transcribed audio text: %s",transcript["text"])
+    return transcript["text"]
 
 def process_chat(
     msg,
@@ -68,6 +89,7 @@ def process_chat(
     )
     if msg == None:
         return
+
     # Respond to message.
     # Mark received message as read.
     queue_out.put(note_read(msg.data.topic, msg.data.seq_id))
@@ -89,11 +111,48 @@ def process_chat(
             publish_msg(common.COMMON_MSG["USER_TOKEN_INVALID"], tid, msg.data.topic)
         )
         return
+    
+    parsed_content = _parse_msg(msg.data.content.decode("utf-8").strip('"'))
+    logging.info("Received message: %s", utils.clip_long_string(parsed_content))
+    if (isinstance(parsed_content, dict)):
+        # Content is a json string
+        try:
+            mime: str = parsed_content['ent'][0]['data']['mime']
+            logging.debug("Mime type: %s", mime)
+            if mime.startswith('audio/'):
+                try:
+                    msg_str = process_audio(parsed_content['ent'][0]['data'])
+                    if msg_str.strip() == "":
+                        queue_out.put(
+                            publish_msg(common.COMMON_MSG["AUDIO_MSG_NOT_SUPPORTED"], tid, msg.data.topic)
+                        )
+                        return
+                    else:
+                        queue_out.put(
+                            publish_msg(f"正在回复：“{msg_str}”...", tid, msg.data.topic)
+                        )
+                        queue_out.put(typing_reply(msg.data.topic))
+                        parsed_content = msg_str
+                except Exception as e:
+                    logging.error("Failed to process audio with exception %s",e)
+                    return
+            elif mime.startswith('image/'):
+                queue_out.put(
+                    publish_msg(common.COMMON_MSG["IMAGE_MSG_NOT_SUPPORTED"], tid, msg.data.topic)
+                )
+                return
+            elif mime == 'text/x-drafty':
+                # Supported now
+                pass
+            else:
+                queue_out.put(
+                    publish_msg(common.COMMON_MSG["MESSAGE_NOT_SUPPORTED"], tid, msg.data.topic)
+                )
+                return
+        except Exception as e:
+            logging.error("Failed to parse mime type from: %s with exception %s", utils.clip_long_string(parsed_content),e)
 
-    msg_str =_parse_msg(msg.data.content.decode("utf-8").strip('"'))
-    # if msg_str not in common.CTRL_KEYS:
-        # tokens_left -= 1
-        # db.save_tokens_left(bot_name, msg.data.from_user_id, tokens_left)
+    msg_str = _recover_multiple_lines(parsed_content)
 
     logging.info("%s: User %s is valid", bot_name, msg.data.from_user_id)
 
