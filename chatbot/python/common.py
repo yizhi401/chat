@@ -10,8 +10,9 @@ COMMON_MSG = {
     "INTERNAL_ERROR": "现在我的脑袋有点乱，让我再好好想想...",
     "MESSAGE_NOT_SUPPORTED":"我现在还理解不了这种类型的信息，请换个方式和我聊天哦",
     "IMAGE_MSG_NOT_SUPPORTED":"我现在还理解不了图片，请换个方式和我聊天哦",
-    "INVALID_MESSAGE_FORMAT":"信息格式错误，请报告BUG",
-    "AUDIO_MSG_NOT_SUPPORTED":"我没听懂您说的是什么，可以再重复一遍吗？",
+    "INVALID_MESSAGE_FORMAT":"信息格式错误, 请报告BUG",
+    "AUDIO_MSG_NOT_RECOGNISED":"我没听懂您说的是什么，可以再重复一遍吗？",
+    "AUDIO_MSG_NOT_SUPPORTED":"目前只有VIP用户可以使用语音功能哦",
 }
 
 CTRL_CMDS = {

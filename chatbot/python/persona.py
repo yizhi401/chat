@@ -361,13 +361,7 @@ class Persona(ABC):
                 available_cmd += f"\n[{key}]：{val}"
             return available_cmd
         elif cmd == "查状态":
-            _unread_photos = sum(self.photo_pool.values())
-            return f"""当前状态:
-好感度：{self.feeling}
-已解锁照片：{_unread_photos}/{len(self.photo_pool)}
-剩余次数：{self.tokens_left['times']}
-剩余tokens: {self.tokens_left['tokens']}
-记忆：{'开' if self.memory else '关'}"""
+            return self._proc_check_state()
         elif cmd == "看照片":
             return self.get_next_photo()
         elif cmd == "记忆开":
@@ -380,6 +374,26 @@ class Persona(ABC):
             logging.error("Unknown command")
 
         return None
+    
+    def _convert_seconds_to_days(self, seconds: int) -> int:
+        return seconds // 86400
+
+    def _proc_check_state(self):
+        _unread_photos = sum(self.photo_pool.values())
+        state =  f"""当前状态:
+好感度：{self.feeling}
+已解锁照片：{_unread_photos}/{len(self.photo_pool)}
+"""
+        if str(self.tokens_left['type']).lower() == 'vip':
+            state += f"剩余天数：{self.tokens_left['ttl'] // 86400}\n"
+        else:
+            state+=f"""剩余次数：{self.tokens_left['times']}
+剩余tokens: {self.tokens_left['tokens']}
+"""
+        state += f"记忆：{'开' if self.memory else '关'}"
+        return state
+
+
 
     def get_next_photo(self):
         if self.last_cmd.strip('"') == "看照片":

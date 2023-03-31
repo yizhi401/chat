@@ -112,6 +112,8 @@ def process_chat(
         )
         return
     
+    vip_user:bool = str(tokens_left['type']).lower() == 'vip'
+    
     parsed_content = _parse_msg(msg.data.content.decode("utf-8").strip('"'))
     logging.info("Received message: %s", utils.clip_long_string(parsed_content))
     if (isinstance(parsed_content, dict)):
@@ -120,11 +122,16 @@ def process_chat(
             mime: str = parsed_content['ent'][0]['data']['mime']
             logging.debug("Mime type: %s", mime)
             if mime.startswith('audio/'):
+                if not vip_user:
+                    queue_out.put(
+                        publish_msg(common.COMMON_MSG["AUDIO_MSG_NOT_SUPPORTED"], tid, msg.data.topic)
+                    )
+                    return
                 try:
                     msg_str = process_audio(parsed_content['ent'][0]['data'])
                     if msg_str.strip() == "":
                         queue_out.put(
-                            publish_msg(common.COMMON_MSG["AUDIO_MSG_NOT_SUPPORTED"], tid, msg.data.topic)
+                            publish_msg(common.COMMON_MSG["AUDIO_MSG_NOT_RECOGNISED"], tid, msg.data.topic)
                         )
                         return
                     else:
@@ -155,6 +162,9 @@ def process_chat(
     msg_str = _recover_multiple_lines(parsed_content)
 
     logging.info("%s: User %s is valid", bot_name, msg.data.from_user_id)
+    if not vip_user:
+        # 免费用户延迟访问
+        time.sleep(2)
 
     chat_persona = CreatePersona(
         bot_name=bot_name,
