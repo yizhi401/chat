@@ -3,10 +3,7 @@ import utils
 import logging
 
 # 系统命令格式（不区分大小写）：
-# [CMD][MODULE][ROLE][CONTENT]
-# 其中，MODULE取值：
-#   PRE - 预置信息
-#   HIS - 聊天历史
+# [CMD][ROLE][CONTENT]
 # ROLE取值：
 #   SYS - 系统
 #   USER - 用户
@@ -15,16 +12,16 @@ import logging
 
 SYS_CMD = [
     # 新增一条记录
-    # 例如：add pre user hello
+    # 例如：add user hello
     "ADD",
     # 删除最后的记录
-    # 例如：del pre
+    # 例如：del
     "DEL",
     # 删除最前面的一条记录
-    # 例如：pop pre
+    # 例如：pop
     "POP",
     # 清空历史记录
-    # 例如：clear pre
+    # 例如：clear
     "CLEAR",
 ]
 
@@ -32,18 +29,17 @@ SYS_CMD = [
 class SysCmd:
     def __init__(self, cmd_str):
         cmd_parts = cmd_str.split()
-        if len(cmd_parts) == 2:
-            self.cmd, self.module = cmd_parts
+        if len(cmd_parts) == 1:
+            self.cmd = cmd_parts
             self.role = ""
             self.content = ""
-        elif len(cmd_parts) == 4:
-            self.cmd, self.module, self.role, self.content = cmd_parts
+        elif len(cmd_parts) == 3:
+            self.cmd, self.role, self.content = cmd_parts
         else:
             raise Exception(f"Invalid command: {cmd_str}")
         self.cmd = self.cmd.upper()
-        self.module = self.module.upper()
         logging.info(
-            f"SysCmd: {self.cmd} {self.module} {self.role} {self.content}")
+            f"SysCmd: {self.cmd} {self.role} {self.content}")
 
     def process(self, current_list) -> list:
         result = ""
@@ -51,7 +47,7 @@ class SysCmd:
             current_list.append(
                 {
                     "role": self.role,
-                    "content": utils.clip_long_string(self.content, clip_to_history=True),
+                    "content": self.content,
                 }
             )
             result = f"{self.role}命令已设置"
@@ -73,11 +69,11 @@ class SysCmd:
         return current_list, result
 
     def __str__(self):
-        return f"SysCmd: {self.cmd} {self.module} {self.role} {self.content}"
+        return f"SysCmd: {self.cmd} {self.role} {self.content}"
 
 
 def check_if_command_valid(argument) -> bool:
-    cmd_reg = r'(DEL|ADD|POP|CLEAR)\s(PRE|HIS)\s?(AI|USER|SYS)?.*'
+    cmd_reg = r'(DEL|ADD|POP|CLEAR)\s(AI|USER|SYS)?.*'
     pattern = re.compile(cmd_reg)
     if pattern.match(argument.upper()):
         return True

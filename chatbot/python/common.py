@@ -58,8 +58,8 @@ CTRL_KEYS = (
     list(GAME_OPTIONS.keys()) + list(CTRL_CMDS.keys())
 )
 
-APP_NAME = "Tino-chatbot"
-APP_VERSION = "1.2.2"
+APP_NAME = "Puppet-chatbot"
+APP_VERSION = "1.0.0"
 LIB_VERSION = pkg_resources.get_distribution("tinode_grpc").version
 
 MAX_PROMPT_LEN = 2000

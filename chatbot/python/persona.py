@@ -341,8 +341,12 @@ class Persona(ABC):
         # time.sleep(3)
         prompt_data = self.generate_prompt()
         words = 0
-        for msg in prompt_data:
-            words += len(msg["content"])
+        # Don't calculate prompt as default.
+        if self.memory:
+            words = len(self.history[-1]["content"])
+        else:
+            for msg in self.history:
+                words += len(msg["content"])
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=prompt_data,
