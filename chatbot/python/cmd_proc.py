@@ -73,8 +73,8 @@ class SysCmd:
 
 
 def check_if_command_valid(argument) -> bool:
-    cmd_reg = r'(DEL|ADD|POP|CLEAR)\s(AI|USER|SYS)?.*'
+    cmd_reg = r'(DEL|ADD|POP|CLEAR)(\s(AI|USER|SYS).*)?'
     pattern = re.compile(cmd_reg)
-    if pattern.match(argument.upper()):
+    if pattern.fullmatch(argument.upper().strip()):
         return True
     return False

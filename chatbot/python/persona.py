@@ -254,10 +254,6 @@ class Persona(ABC):
         self.increase_feeling(msg_str, content)
         return content
 
-    def _proc_reset_cmd(self):
-        self.prepare_persona()
-        return "人格已经重置"
-
     def _publish_msg(self, msg_str: str):
         head = {}
         head["mime"] = utils.encode_to_bytes("text/x-drafty")
@@ -271,8 +267,6 @@ class Persona(ABC):
             content = self.cmd_resp(msg_str)
         elif msg_str.lower() == "echo":
             content = self._proc_echo_cmd()
-        elif msg_str.lower() == "reset":
-            content = self._proc_reset_cmd()
         else:
             content = self._proc_normal_chat(msg_str)
 
